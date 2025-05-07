@@ -1,25 +1,30 @@
-scikit-learn==1.0.2
-pickleshare==0.7.5
-ninja==1.10.2.3
+--find-links https://data.pyg.org/whl/torch-2.5.1+cu124.html
+--find-links https://download.pytorch.org/whl/cu124
+
+numpy
+laspy[lasrz,laszip]
+torch==2.5.1
+torchvision
+torch-geometric
+torch-scatter
+torch-cluster
+scikit-learn
+pickleshare
+ninja
 gdown
-easydict==1.9
-PyYAML==6.0
-protobuf==3.19.4
-tensorboard==2.8.0
-termcolor==1.1.0
-tqdm==4.62.3
-multimethod==1.7
-h5py==3.6.0
-matplotlib==3.5.1
+easydict
+pyyaml
+protobug
+tensorboard
+termcolor
+tqdm
+multimethod
+h5py
+matplotlib
 wandb
 pyvista
-setuptools==59.5.0
-Cython==0.29.28
+setuptools
 pandas
 deepspeed
 shortuuid
 
-# for docs
-mkdocs-material
-mkdocs-awesome-pages-plugin
-mdx_truly_sane_lists

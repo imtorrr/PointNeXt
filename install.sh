@@ -1,54 +1,99 @@
 #!/usr/bin/env bash
-# command to install this enviroment: source init.sh
+# command to install this environment: source init.sh
 
-# install miniconda3 if not installed yet.
-#wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-#bash Miniconda3-latest-Linux-x86_64.sh
-#source ~/.bashrc
+echo "------------------------------------------------------------"
+echo "               Setting up the coding environment..."
+echo "------------------------------------------------------------"
+echo ""
 
+# Function to display messages with a prefix
+log_info() {
+  echo -e "\e[34m[INFO]\e[0m: $1"
+}
 
-# The following 4 lines are only for slurm machines. uncomment if needed.  
-export TORCH_CUDA_ARCH_LIST="6.1;6.2;7.0;7.5;8.0"   # a100: 8.0; v100: 7.0; 2080ti: 7.5; titan xp: 6.1
-module purge
-module load cuda/11.1.1
-module load gcc/7.5.0
+log_success() {
+  echo -e "\e[32m[SUCCESS]\e[0m: $1"
+}
 
-# download openpoints
-# git submodule add git@github.com:guochengqian/openpoints.git
+log_warning() {
+  echo -e "\e[33m[WARNING]\e[0m: $1"
+}
+
+log_error() {
+  echo -e "\e[31m[ERROR]\e[0m: $1"
+}
+
+export TORCH_CUDA_ARCH_LIST="5.0;6.0;7.0;7.5;8.0;8.6;9.0"
+
+echo ""
+log_info "Updating git submodules..."
 git submodule update --init --recursive
-git submodule update --remote --merge # update to the latest version
+if [ $? -eq 0 ]; then
+  log_success "Git submodules initialized and updated."
+else
+  log_error "Failed to initialize/update git submodules."
+fi
 
-# install PyTorch
-conda deactivate
-conda env remove --name openpoints
-conda create -n openpoints -y python=3.7 numpy=1.20 numba
-conda activate openpoints
+git submodule update --remote --merge
+if [ $? -eq 0 ]; then
+  log_success "Git submodules updated to the latest version and merged."
+else
+  log_warning "Could not update all git submodules to the latest version."
+fi
 
-# please always double check installation for pytorch and torch-scatter from the official documentation
-conda install -y pytorch=1.10.1 torchvision cudatoolkit=11.3 -c pytorch -c nvidia
-pip install torch-scatter -f https://data.pyg.org/whl/torch-1.10.1+cu113.html
+echo ""
+log_info "Installing dependencies from requirements.txt using uv..."
+uv pip install -r requirements.txt
+if [ $? -eq 0 ]; then
+  log_success "Dependencies installed successfully!"
+else
+  log_error "Failed to install dependencies."
+fi
 
-pip install -r requirements.txt
-
-# install cpp extensions, the pointnet++ library
+echo ""
+log_info "Installing cpp extensions for pointnet++ library..."
 cd openpoints/cpp/pointnet2_batch
 python setup.py install
-cd ../
-
-# grid_subsampling library. necessary only if interested in S3DIS_sphere
-cd subsampling
-python setup.py build_ext --inplace
+if [ $? -eq 0 ]; then
+  log_success "pointnet2_batch cpp extensions installed successfully!"
+else
+  log_error "Failed to install pointnet2_batch cpp extensions. Check the output for errors."
+fi
 cd ..
 
-
-# # point transformer library. Necessary only if interested in Point Transformer and Stratified Transformer
+echo ""
+log_info "Installing pointops library (for Point Transformer and Stratified Transformer)..."
 cd pointops/
 python setup.py install
+if [ $? -eq 0 ]; then
+  log_success "pointops library installed successfully!"
+else
+  log_warning "Failed to install pointops library. This is only necessary if you need Point Transformer and Stratified Transformer."
+fi
 cd ..
 
-# Blow are functions that optional. Necessary only if interested in reconstruction tasks such as completion
-cd chamfer_dist
-python setup.py install --user
-cd ../emd
-python setup.py install --user
+echo ""
+log_info "Installing chamfer_dist library (for reconstruction tasks)..."
+cd chamfer_dist/
+python setup.py install
+if [ $? -eq 0 ]; then
+  log_success "chamfer_dist library installed successfully!"
+else
+  log_warning "Failed to install chamfer_dist library. This is only necessary if you are interested in reconstruction tasks."
+fi
+cd ..
+
+echo ""
+log_info "Installing emd library (for reconstruction tasks)..."
+cd emd/
+python setup.py install
+if [ $? -eq 0 ]; then
+  log_success "emd library installed successfully!"
+else
+  log_warning "Failed to install emd library. This is only necessary if you are interested in reconstruction tasks."
+fi
 cd ../../../
+
+echo ""
+log_info "Environment setup complete!"
+echo "------------------------------------------------------------"
