@@ -5,7 +5,7 @@ dataset:
     data_root: data/S3DIS/s3disfull
     test_area: 5
     voxel_size: 0.04
-    return_geometric_data: True
+
   train:
     split: train
     voxel_max: 24000
