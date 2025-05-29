@@ -1,3 +1,4 @@
 [submodule "openpoints"]
 	path = openpoints
 	url = https://github.com/imtorrr/openpoints.git
+	branch = master

@@ -42,6 +42,9 @@ else
 fi
 
 echo ""
+log_info "Creating virtual environment using uv..."
+uv venv --python 3.12
+source .venv/bin/activate
 log_info "Installing dependencies from requirements.txt using uv..."
 uv pip install -r requirements.txt
 if [ $? -eq 0 ]; then
@@ -96,4 +99,5 @@ cd ../../../
 
 echo ""
 log_info "Environment setup complete!"
+deactivate
 echo "------------------------------------------------------------"
