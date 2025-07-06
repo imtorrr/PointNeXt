@@ -1,42 +1,39 @@
 # data augmentation
 dataset:
   common:
-    NAME: S3DIS
-    data_root: data/S3DIS/s3disfull
-    test_area: 5
+    NAME: NIBIO_MLS
+    data_root: data/NIBIO_MLS
     voxel_size: 0.04
+    as_pyg: True
 
   train:
     split: train
-    voxel_max: 10000
     loop: 1  # here, the training has been looped 30 times. therefore, the training epochs do not need much.
-    presample: False
+    presample: True
   val:
     split: val
-    voxel_max: 10000
-    presample: False 
+    presample: True 
   test:
     split: test
-    voxel_max: null
     presample: False 
 
-feature_keys: x,heights
-num_classes: 13
-batch_size: 32
+feature_keys: pos
+num_classes: 4
+batch_size: 4
 val_batch_size: 1
 
 dataloader:
   num_workers: 6
 
 datatransforms:
-  train: [ChromaticAutoContrast, PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter, ChromaticDropGPU, ChromaticNormalize]
-  val: [PointsToTensor, PointCloudXYZAlign, ChromaticNormalize]
-  vote: [ChromaticDropGPU]
+  train: [PointsToTensor, FixedPoints, RandomDropout, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter,]
+  val: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
   kwargs:
+    num_points: 24000
     color_drop: 0.2
     gravity_dim: 2
     scale: [0.9, 1.1]
-    angle: [0, 0, 1]
+    angle: [0.25, 0.25, 1]
     jitter_sigma: 0.005
     jitter_clip: 0.02
 
@@ -45,7 +42,7 @@ datatransforms:
 # ---------------------------------------------------------------------------- #
 val_fn: validate
 ignore_index: null 
-epochs: 100
+epochs: 1
 
 cls_weighed_loss: False
 
@@ -69,9 +66,9 @@ use_voting: False
 # ---------------------------------------------------------------------------- #
 # io and misc
 # ---------------------------------------------------------------------------- #
-log_dir: 's3dis'
+log_dir: 'nibio_mls'
 save_freq: -1 # save epoch every xxx epochs, -1 only save last and best. 
 val_freq: 1
 
 wandb:
-  project: PointNeXt-S3DIS
+  project: PointNeXt-NIBIO

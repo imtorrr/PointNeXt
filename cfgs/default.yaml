@@ -14,7 +14,7 @@ seed: null
 # Training cfgs
 # ---------------------------------------------------------------------------- #
 epoch: 0
-epochs: 100 
+epochs: 1 
 
 ignore_index: null
 val_fn: validate
