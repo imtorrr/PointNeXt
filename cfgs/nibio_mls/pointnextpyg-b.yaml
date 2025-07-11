@@ -1,21 +1,21 @@
 # Model Information
-# GFLOPs  Params.(M)
-#  84.81    41.576
-# Throughput (ins./s): 46.06739325463371 
+# GFLOPs  GMACs   Params.(M)
+#  8.94    4.41    3.828
+# Throughput (ins./s): 158.12545008110516 
 
 model:
   NAME: VariableSeg
   encoder_args:
     NAME: PyGPointNextEncoder
-    blocks: [1, 4, 7, 4, 4] 
+    blocks: [1, 2, 3, 2, 2]
     strides: [1, 4, 4, 4, 4]
-    sa_layers: 1
+    sa_layers: 1 
     sa_use_res: False 
-    width: 64 
+    width: 32
     in_channels: 3
     expansion: 4
     radius: 0.1
-    nsample: 32 
+    nsample: 32
     aggr_args:
       feature_type: 'dp_fj'
       reduction: 'max'
@@ -37,4 +37,3 @@ model:
     norm_args:
       norm: 'bn'
 
-batch_size: 8
