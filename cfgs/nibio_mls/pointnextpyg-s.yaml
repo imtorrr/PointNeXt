@@ -1,21 +1,21 @@
 # Model Information
-# GFLOPs  Params.(M)
-#  84.81    41.576
-# Throughput (ins./s): 46.06739325463371 
+# GFLOPs  GMACs   Params.(M)
+#  3.64    1.79    0.792
+# Throughput (ins./s): 226.73038739659074 
 
 model:
   NAME: VariableSeg
   encoder_args:
     NAME: PyGPointNextEncoder
-    blocks: [1, 4, 7, 4, 4] 
+    blocks: [1, 1, 1, 1, 1]
     strides: [1, 4, 4, 4, 4]
-    sa_layers: 1
-    sa_use_res: False 
-    width: 64 
-    in_channels: 3
+    sa_layers: 2 
+    sa_use_res: True 
+    width: 32
+    in_channels: 4
     expansion: 4
     radius: 0.1
-    nsample: 32 
+    nsample: 32
     aggr_args:
       feature_type: 'dp_fj'
       reduction: 'max'
@@ -37,4 +37,13 @@ model:
     norm_args:
       norm: 'bn'
 
-batch_size: 8
+
+# do not conduct rotation in small model.
+datatransforms:
+  train: [PointsToTensor, FixedPoints, RandomDropout, PointCloudScaling, PointCloudXYZAlign, PointCloudJitter,]
+  val: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
+  kwargs:
+    gravity_dim: 2
+    scale: [0.9, 1.1]
+    jitter_sigma: 0.005
+    jitter_clip: 0.02
