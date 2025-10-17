@@ -1,3 +1,10 @@
+"""
+(Distributed) training script for scene segmentation
+This file currently supports training and testing on S3DIS
+If more than 1 GPU is provided, will launch multi processing distributed training by default
+if you only wana use 1 GPU, set `CUDA_VISIBLE_DEVICES` accordingly
+"""
+
 import sys
 import os
 
@@ -18,6 +25,7 @@ import torch.nn as nn
 from torch import distributed as dist, multiprocessing as mp
 from torch.utils.tensorboard import SummaryWriter
 from torch_scatter import scatter
+from torch_geometric.data import Data, Batch
 from openpoints.utils import (
     set_random_seed,
     save_checkpoint,
@@ -56,6 +64,7 @@ import warnings
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
+
 def write_to_csv(oa, macc, miou, ious, best_epoch, cfg, write_header=True, area=5):
     ious_table = [f"{item:.2f}" for item in ious]
     header = (
@@ -78,7 +87,93 @@ def write_to_csv(oa, macc, miou, ious, best_epoch, cfg, write_header=True, area=
             writer.writerow(header)
         writer.writerow(data)
         f.close()
-        
+
+
+def generate_data_list(cfg):
+    if "s3dis" in cfg.dataset.common.NAME.lower():
+        raw_root = os.path.join(cfg.dataset.common.data_root, "raw")
+        data_list = sorted(os.listdir(raw_root))
+        data_list = [
+            os.path.join(raw_root, item)
+            for item in data_list
+            if "Area_{}".format(cfg.dataset.common.test_area) in item
+        ]
+    elif "scannet" in cfg.dataset.common.NAME.lower():
+        data_list = glob.glob(
+            os.path.join(cfg.dataset.common.data_root, cfg.dataset.test.split, "*.pth")
+        )
+    elif "semantickitti" in cfg.dataset.common.NAME.lower():
+        if cfg.dataset.test.split == "val":
+            split_no = 1
+        else:
+            split_no = 2
+        data_list = get_semantickitti_file_list(
+            os.path.join(cfg.dataset.common.data_root, "sequences"),
+            str(cfg.dataset.test.test_id + 11),
+        )[split_no]
+    elif "nibio_mls" in cfg.dataset.common.NAME.lower():
+        data_list = glob.glob(
+            os.path.join(cfg.dataset.common.data_root, "tiled", cfg.dataset.test.split, "*.npy")
+        )
+    else:
+        raise Exception("dataset not supported yet")
+    return data_list
+
+
+def load_data(data_path, cfg):
+    label, feat = None, None
+    if "s3dis" in cfg.dataset.common.NAME.lower():
+        data = np.load(data_path)  # xyzrgbl, N*7
+        coord, feat, label = data[:, :3], data[:, 3:6], data[:, 6]
+        feat = np.clip(feat / 255.0, 0, 1).astype(np.float32)
+    elif "scannet" in cfg.dataset.common.NAME.lower():
+        data = torch.load(data_path)  # xyzrgbl, N*7
+        coord, feat = data[0], data[1]
+        if cfg.dataset.test.split != "test":
+            label = data[2]
+        else:
+            label = None
+        feat = np.clip((feat + 1) / 2.0, 0, 1).astype(np.float32)
+    elif "semantickitti" in cfg.dataset.common.NAME.lower():
+        coord = load_pc_kitti(data_path[0])
+        if cfg.dataset.test.split != "test":
+            label = load_label_kitti(data_path[1], remap_lut_read)
+    elif "nibio_mls" in cfg.dataset.common.NAME.lower():
+        data = np.load(data_path)
+        coord, label = data[:, :3], data[:, 3:4]
+    coord -= coord.min(0)
+
+    idx_points = []
+    voxel_idx, reverse_idx_part, reverse_idx_sort = None, None, None
+    voxel_size = cfg.dataset.common.get("voxel_size", None)
+
+    if voxel_size is not None:
+        # idx_sort: original point indicies sorted by voxel NO.
+        # voxel_idx: Voxel NO. for the sorted points
+        idx_sort, voxel_idx, count = voxelize(coord, voxel_size, mode=1)
+        if cfg.get("test_mode", "multi_voxel") == "nearest_neighbor":
+            idx_select = (
+                np.cumsum(np.insert(count, 0, 0)[0:-1])
+                + np.random.randint(0, count.max(), count.size) % count
+            )
+            idx_part = idx_sort[idx_select]
+            npoints_subcloud = voxel_idx.max() + 1
+            idx_shuffle = np.random.permutation(npoints_subcloud)
+            idx_part = idx_part[idx_shuffle]  # idx_part: randomly sampled points of a voxel
+            reverse_idx_part = np.argsort(idx_shuffle, axis=0)  # revevers idx_part to sorted
+            idx_points.append(idx_part)
+            reverse_idx_sort = np.argsort(idx_sort, axis=0)
+        else:
+            for i in range(count.max()):
+                idx_select = np.cumsum(np.insert(count, 0, 0)[0:-1]) + i % count
+                idx_part = idx_sort[idx_select]
+                np.random.shuffle(idx_part)
+                idx_points.append(idx_part)
+    else:
+        idx_points.append(np.arange(label.shape[0]))
+    return coord, feat, label, idx_points, voxel_idx, reverse_idx_part, reverse_idx_sort
+
+
 def main(gpu, cfg):
     if cfg.distributed:
         if cfg.mp:
@@ -107,7 +202,7 @@ def main(gpu, cfg):
     model_size = cal_model_parm_nums(model)
     logging.info(model)
     logging.info("Number of params: %.4f M" % (model_size / 1e6))
-    
+
     if cfg.sync_bn:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         logging.info("Using Synchronized BatchNorm ...")
@@ -117,11 +212,11 @@ def main(gpu, cfg):
             model.cuda(), device_ids=[cfg.rank], output_device=cfg.rank
         )
         logging.info("Using Distributed Data parallel ...")
-        
+
     # optimizer & scheduler
     optimizer = build_optimizer_from_cfg(model, lr=cfg.lr, **cfg.optimizer)
     scheduler = build_scheduler_from_cfg(cfg, optimizer)
-    
+
     # build dataset
     val_loader = build_dataloader_from_cfg(
         cfg.get("val_batch_size", cfg.batch_size),
@@ -131,43 +226,32 @@ def main(gpu, cfg):
         split="val",
         distributed=cfg.distributed,
     )
-    
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
     num_classes = (
-        val_loader.dataset.num_classes
-        if hasattr(val_loader.dataset, "num_classes")
-        else None
+        val_loader.dataset.num_classes if hasattr(val_loader.dataset, "num_classes") else None
     )
-    
+
     if num_classes is not None:
         assert cfg.num_classes == num_classes
-        
+
     logging.info(f"number of classes of the dataset: {num_classes}")
     cfg.classes = (
         val_loader.dataset.classes
         if hasattr(val_loader.dataset, "classes")
         else np.arange(num_classes)
     )
-    cfg.cmap = (
-        np.array(val_loader.dataset.cmap)
-        if hasattr(val_loader.dataset, "cmap")
-        else None
-    )
-    
+    cfg.cmap = np.array(val_loader.dataset.cmap) if hasattr(val_loader.dataset, "cmap") else None
+
     validate_fn = validate
-    
+
     # optionally resume from a checkpoint
     model_module = model.module if hasattr(model, "module") else model
     if cfg.pretrained_path is not None:
         if cfg.mode == "resume":
-            resume_checkpoint(
-                cfg, model, optimizer, scheduler, pretrained_path=cfg.pretrained_path
-            )
+            resume_checkpoint(cfg, model, optimizer, scheduler, pretrained_path=cfg.pretrained_path)
         else:
             if cfg.mode == "val":
-                best_epoch, best_val = load_checkpoint(
-                    model, pretrained_path=cfg.pretrained_path
-                )
+                best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
                 val_miou, val_macc, val_oa, val_ious, val_accs = validate_fn(
                     model, val_loader, cfg, num_votes=1, epoch=epoch
                 )
@@ -178,7 +262,20 @@ def main(gpu, cfg):
                     )
                 return val_miou
             elif cfg.mode == "test":
-                raise ValueError("Test mode is not supported")
+                best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
+                data_list = generate_data_list(cfg)
+                logging.info(f"length of test dataset: {len(data_list)}")
+                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
+
+                if test_miou is not None:
+                    with np.printoptions(precision=2, suppress=True):
+                        logging.info(
+                            f"Best ckpt @E{best_epoch},  test_oa , test_macc, test_miou: {test_oa:.2f} {test_macc:.2f} {test_miou:.2f}, "
+                            f"\niou per cls is: {test_ious}"
+                        )
+                    cfg.csv_path = os.path.join(cfg.run_dir, cfg.run_name + "_test.csv")
+                    write_to_csv(test_oa, test_macc, test_miou, test_ious, best_epoch, cfg)
+                return test_miou
 
             elif "encoder" in cfg.mode:
                 if "inv" in cfg.mode:
@@ -194,16 +291,14 @@ def main(gpu, cfg):
 
             else:
                 logging.info(f"Finetuning from {cfg.pretrained_path}")
-                load_checkpoint(
-                    model, cfg.pretrained_path, cfg.get("pretrained_module", None)
-                )
+                load_checkpoint(model, cfg.pretrained_path, cfg.get("pretrained_module", None))
     else:
         logging.info("Training from scratch")
-        
+
     if "freeze_blocks" in cfg.mode:
         for p in model_module.encoder.blocks.parameters():
             p.requires_grad = False
-            
+
     train_loader = build_dataloader_from_cfg(
         cfg.batch_size,
         cfg.dataset,
@@ -212,9 +307,8 @@ def main(gpu, cfg):
         split="train",
         distributed=cfg.distributed,
     )
-    
-    
     logging.info(f"length of training dataset: {len(train_loader.dataset)}")
+
     cfg.criterion_args.weight = None
     if cfg.get("cls_weighed_loss", False):
         if hasattr(train_loader.dataset, "num_per_class"):
@@ -223,9 +317,8 @@ def main(gpu, cfg):
             )
         else:
             logging.info("`num_per_class` attribute is not founded in dataset")
-            
     criterion = build_criterion_from_cfg(cfg.criterion_args).cuda()
-    
+
     # ===> start training
     if cfg.use_amp:
         scaler = torch.cuda.amp.GradScaler()
@@ -248,18 +341,16 @@ def main(gpu, cfg):
             train_loader.dataset, "epoch"
         ):  # some dataset sets the dataset length as a fixed steps.
             train_loader.dataset.epoch = epoch - 1
-        train_loss, train_miou, train_macc, train_oa, _, _, total_iter = (
-            train_one_epoch(
-                model,
-                train_loader,
-                criterion,
-                optimizer,
-                scheduler,
-                scaler,
-                epoch,
-                total_iter,
-                cfg,
-            )
+        train_loss, train_miou, train_macc, train_oa, _, _, total_iter = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            scheduler,
+            scaler,
+            epoch,
+            total_iter,
+            cfg,
         )
 
         is_best = False
@@ -310,13 +401,18 @@ def main(gpu, cfg):
                 is_best=is_best,
             )
             is_best = False
-    
+    # do not save file to wandb to save wandb space
+    # if writer is not None:
+    #     Wandb.add_file(os.path.join(cfg.ckpt_dir, f'{cfg.run_name}_ckpt_best.pth'))
+    # Wandb.add_file(os.path.join(cfg.ckpt_dir, f'{cfg.logname}_ckpt_latest.pth'))
+
+    # validate
     with np.printoptions(precision=2, suppress=True):
         logging.info(
             f"Best ckpt @E{best_epoch},  val_oa {oa_when_best:.2f}, val_macc {macc_when_best:.2f}, val_miou {best_val:.2f}, "
             f"\niou per cls is: {ious_when_best}"
         )
-    
+
     if cfg.world_size < 2:  # do not support multi gpu testing
         # test
         load_checkpoint(
@@ -331,9 +427,7 @@ def main(gpu, cfg):
             )
         else:
             data_list = generate_data_list(cfg)
-            test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(
-                model, data_list, cfg
-            )
+            test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
         with np.printoptions(precision=2, suppress=True):
             logging.info(
                 f"Best ckpt @E{best_epoch},  test_oa {test_oa:.2f}, test_macc {test_macc:.2f}, test_miou {test_miou:.2f}, "
@@ -343,16 +437,12 @@ def main(gpu, cfg):
             writer.add_scalar("test_miou", test_miou, epoch)
             writer.add_scalar("test_macc", test_macc, epoch)
             writer.add_scalar("test_oa", test_oa, epoch)
-        write_to_csv(
-            test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True
-        )
+        write_to_csv(test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True)
         logging.info(f"save results in {cfg.csv_path}")
         if cfg.use_voting:
             load_checkpoint(
                 model,
-                pretrained_path=os.path.join(
-                    cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"
-                ),
+                pretrained_path=os.path.join(cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"),
             )
             set_random_seed(cfg.seed)
             val_miou, val_macc, val_oa, val_ious, val_accs = validate_fn(
@@ -389,7 +479,8 @@ def main(gpu, cfg):
         writer.close()
     # dist.destroy_process_group() # comment this line due to https://github.com/guochengqian/PointNeXt/issues/95
     wandb.finish(exit_code=True)
-    
+
+
 def train_one_epoch(
     model, train_loader, criterion, optimizer, scheduler, scaler, epoch, total_iter, cfg
 ):
@@ -399,7 +490,6 @@ def train_one_epoch(
     pbar = tqdm(enumerate(train_loader), total=train_loader.__len__())
     num_iter = 0
     for idx, data in pbar:
-        import pdb;pdb.set_trace()
         keys = data.keys() if callable(data.keys) else data.keys
         for key in keys:
             data[key] = data[key].cuda(non_blocking=True)
@@ -414,6 +504,9 @@ def train_one_epoch(
         data["epoch"] = epoch
         total_iter += 1
         data["iter"] = total_iter
+
+        # TODO: Convert to PyG Data here
+        data = Data(**data).to("cuda")
         with torch.cuda.amp.autocast(enabled=cfg.use_amp):
             logits = model(data)
             loss = (
@@ -429,9 +522,7 @@ def train_one_epoch(
         # optimize
         if num_iter == cfg.step_per_update:
             if cfg.get("grad_norm_clip") is not None and cfg.grad_norm_clip > 0.0:
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), cfg.grad_norm_clip, norm_type=2
-                )
+                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_norm_clip, norm_type=2)
             num_iter = 0
 
             if cfg.use_amp:
@@ -460,9 +551,7 @@ def train_one_epoch(
 
 
 @torch.no_grad()
-def validate(
-    model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1, total_iter=-1
-):
+def validate(model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1, total_iter=-1):
     model.eval()  # set model to eval mode
     cm = ConfusionMatrix(num_classes=cfg.num_classes, ignore_index=cfg.ignore_index)
     pbar = tqdm(enumerate(val_loader), total=val_loader.__len__(), desc="Val")
@@ -474,6 +563,7 @@ def validate(
         data["x"] = get_features_by_keys(data, cfg.feature_keys)
         data["epoch"] = epoch
         data["iter"] = total_iter
+        data = Data(**data)
         logits = model(data)
         if "mask" not in cfg.criterion_args.NAME or cfg.get("use_maks", False):
             cm.update(logits.argmax(dim=1), target)
@@ -532,9 +622,7 @@ if __name__ == "__main__":
     cfg.task_name = args.cfg.split(".")[-2].split("/")[
         -2
     ]  # task/dataset name, \eg s3dis, modelnet40_cls
-    cfg.cfg_basename = args.cfg.split(".")[-2].split("/")[
-        -1
-    ]  # cfg_basename, \eg pointnext-xl
+    cfg.cfg_basename = args.cfg.split(".")[-2].split("/")[-1]  # cfg_basename, \eg pointnext-xl
     tags = [
         cfg.task_name,  # task name (the folder of name under ./cfgs
         cfg.mode,
@@ -561,9 +649,7 @@ if __name__ == "__main__":
         resume_exp_directory(cfg, pretrained_path=cfg.pretrained_path)
         cfg.wandb.tags = [cfg.mode]
     else:
-        generate_exp_directory(
-            cfg, tags, additional_id=os.environ.get("MASTER_PORT", None)
-        )
+        generate_exp_directory(cfg, tags, additional_id=os.environ.get("MASTER_PORT", None))
         cfg.wandb.tags = tags
     os.environ["JOB_LOG_DIR"] = cfg.log_dir
     cfg_path = os.path.join(cfg.run_dir, "cfg.yaml")

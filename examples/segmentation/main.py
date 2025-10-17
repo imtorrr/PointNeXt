@@ -4,6 +4,7 @@ This file currently supports training and testing on S3DIS
 If more than 1 GPU is provided, will launch multi processing distributed training by default
 if you only wana use 1 GPU, set `CUDA_VISIBLE_DEVICES` accordingly
 """
+
 import sys
 import os
 
@@ -59,7 +60,6 @@ from openpoints.scheduler import build_scheduler_from_cfg
 from openpoints.loss import build_criterion_from_cfg
 from openpoints.models import build_model_from_cfg
 import warnings
-
 
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -152,12 +152,8 @@ def load_data(data_path, cfg):
             idx_part = idx_sort[idx_select]
             npoints_subcloud = voxel_idx.max() + 1
             idx_shuffle = np.random.permutation(npoints_subcloud)
-            idx_part = idx_part[
-                idx_shuffle
-            ]  # idx_part: randomly sampled points of a voxel
-            reverse_idx_part = np.argsort(
-                idx_shuffle, axis=0
-            )  # revevers idx_part to sorted
+            idx_part = idx_part[idx_shuffle]  # idx_part: randomly sampled points of a voxel
+            reverse_idx_part = np.argsort(idx_shuffle, axis=0)  # revevers idx_part to sorted
             idx_points.append(idx_part)
             reverse_idx_sort = np.argsort(idx_sort, axis=0)
         else:
@@ -225,9 +221,7 @@ def main(gpu, cfg):
     )
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
     num_classes = (
-        val_loader.dataset.num_classes
-        if hasattr(val_loader.dataset, "num_classes")
-        else None
+        val_loader.dataset.num_classes if hasattr(val_loader.dataset, "num_classes") else None
     )
     if num_classes is not None:
         assert cfg.num_classes == num_classes
@@ -237,27 +231,17 @@ def main(gpu, cfg):
         if hasattr(val_loader.dataset, "classes")
         else np.arange(num_classes)
     )
-    cfg.cmap = (
-        np.array(val_loader.dataset.cmap)
-        if hasattr(val_loader.dataset, "cmap")
-        else None
-    )
-    validate_fn = (
-        validate if "sphere" not in cfg.dataset.common.NAME.lower() else validate_sphere
-    )
+    cfg.cmap = np.array(val_loader.dataset.cmap) if hasattr(val_loader.dataset, "cmap") else None
+    validate_fn = validate if "sphere" not in cfg.dataset.common.NAME.lower() else validate_sphere
 
     # optionally resume from a checkpoint
     model_module = model.module if hasattr(model, "module") else model
     if cfg.pretrained_path is not None:
         if cfg.mode == "resume":
-            resume_checkpoint(
-                cfg, model, optimizer, scheduler, pretrained_path=cfg.pretrained_path
-            )
+            resume_checkpoint(cfg, model, optimizer, scheduler, pretrained_path=cfg.pretrained_path)
         else:
             if cfg.mode == "val":
-                best_epoch, best_val = load_checkpoint(
-                    model, pretrained_path=cfg.pretrained_path
-                )
+                best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
                 val_miou, val_macc, val_oa, val_ious, val_accs = validate_fn(
                     model, val_loader, cfg, num_votes=1, epoch=epoch
                 )
@@ -268,14 +252,10 @@ def main(gpu, cfg):
                     )
                 return val_miou
             elif cfg.mode == "test":
-                best_epoch, best_val = load_checkpoint(
-                    model, pretrained_path=cfg.pretrained_path
-                )
+                best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
                 data_list = generate_data_list(cfg)
                 logging.info(f"length of test dataset: {len(data_list)}")
-                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(
-                    model, data_list, cfg
-                )
+                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
 
                 if test_miou is not None:
                     with np.printoptions(precision=2, suppress=True):
@@ -284,9 +264,7 @@ def main(gpu, cfg):
                             f"\niou per cls is: {test_ious}"
                         )
                     cfg.csv_path = os.path.join(cfg.run_dir, cfg.run_name + "_test.csv")
-                    write_to_csv(
-                        test_oa, test_macc, test_miou, test_ious, best_epoch, cfg
-                    )
+                    write_to_csv(test_oa, test_macc, test_miou, test_ious, best_epoch, cfg)
                 return test_miou
 
             elif "encoder" in cfg.mode:
@@ -303,9 +281,7 @@ def main(gpu, cfg):
 
             else:
                 logging.info(f"Finetuning from {cfg.pretrained_path}")
-                load_checkpoint(
-                    model, cfg.pretrained_path, cfg.get("pretrained_module", None)
-                )
+                load_checkpoint(model, cfg.pretrained_path, cfg.get("pretrained_module", None))
     else:
         logging.info("Training from scratch")
 
@@ -355,18 +331,16 @@ def main(gpu, cfg):
             train_loader.dataset, "epoch"
         ):  # some dataset sets the dataset length as a fixed steps.
             train_loader.dataset.epoch = epoch - 1
-        train_loss, train_miou, train_macc, train_oa, _, _, total_iter = (
-            train_one_epoch(
-                model,
-                train_loader,
-                criterion,
-                optimizer,
-                scheduler,
-                scaler,
-                epoch,
-                total_iter,
-                cfg,
-            )
+        train_loss, train_miou, train_macc, train_oa, _, _, total_iter = train_one_epoch(
+            model,
+            train_loader,
+            criterion,
+            optimizer,
+            scheduler,
+            scaler,
+            epoch,
+            total_iter,
+            cfg,
         )
 
         is_best = False
@@ -443,9 +417,7 @@ def main(gpu, cfg):
             )
         else:
             data_list = generate_data_list(cfg)
-            test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(
-                model, data_list, cfg
-            )
+            test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
         with np.printoptions(precision=2, suppress=True):
             logging.info(
                 f"Best ckpt @E{best_epoch},  test_oa {test_oa:.2f}, test_macc {test_macc:.2f}, test_miou {test_miou:.2f}, "
@@ -455,16 +427,12 @@ def main(gpu, cfg):
             writer.add_scalar("test_miou", test_miou, epoch)
             writer.add_scalar("test_macc", test_macc, epoch)
             writer.add_scalar("test_oa", test_oa, epoch)
-        write_to_csv(
-            test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True
-        )
+        write_to_csv(test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True)
         logging.info(f"save results in {cfg.csv_path}")
         if cfg.use_voting:
             load_checkpoint(
                 model,
-                pretrained_path=os.path.join(
-                    cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"
-                ),
+                pretrained_path=os.path.join(cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"),
             )
             set_random_seed(cfg.seed)
             val_miou, val_macc, val_oa, val_ious, val_accs = validate_fn(
@@ -541,9 +509,7 @@ def train_one_epoch(
         # optimize
         if num_iter == cfg.step_per_update:
             if cfg.get("grad_norm_clip") is not None and cfg.grad_norm_clip > 0.0:
-                torch.nn.utils.clip_grad_norm_(
-                    model.parameters(), cfg.grad_norm_clip, norm_type=2
-                )
+                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_norm_clip, norm_type=2)
             num_iter = 0
 
             if cfg.use_amp:
@@ -572,9 +538,7 @@ def train_one_epoch(
 
 
 @torch.no_grad()
-def validate(
-    model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1, total_iter=-1
-):
+def validate(model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1, total_iter=-1):
     model.eval()  # set model to eval mode
     cm = ConfusionMatrix(num_classes=cfg.num_classes, ignore_index=cfg.ignore_index)
     pbar = tqdm(enumerate(val_loader), total=val_loader.__len__(), desc="Val")
@@ -649,9 +613,7 @@ def validate_sphere(
         logits = model(data)
         all_logits.append(logits)
         idx_points.append(data["input_inds"])
-    all_logits = (
-        torch.cat(all_logits, dim=0).transpose(1, 2).reshape(-1, cfg.num_classes)
-    )
+    all_logits = torch.cat(all_logits, dim=0).transpose(1, 2).reshape(-1, cfg.num_classes)
     idx_points = torch.cat(idx_points, dim=0).flatten()
 
     if cfg.distributed:
@@ -710,9 +672,7 @@ def validate_sphere(
             write_obj(
                 coord[start_idx:end_idx],
                 pred[start_idx:end_idx],
-                os.path.join(
-                    cfg.vis_dir, f"{cfg.cfg_basename}-{dataset_name}-{idx}.obj"
-                ),
+                os.path.join(cfg.vis_dir, f"{cfg.cfg_basename}-{dataset_name}-{idx}.obj"),
             )
     return miou, macc, oa, ious, accs
 
@@ -763,21 +723,17 @@ def test(model, data_list, cfg, num_votes=1):
         logging.info(f"Test [{cloud_idx}]/[{len_data}] cloud")
         cm = ConfusionMatrix(num_classes=cfg.num_classes, ignore_index=cfg.ignore_index)
         all_logits = []
-        coord, feat, label, idx_points, voxel_idx, reverse_idx_part, reverse_idx = (
-            load_data(data_path, cfg)
+        coord, feat, label, idx_points, voxel_idx, reverse_idx_part, reverse_idx = load_data(
+            data_path, cfg
         )
         if label is not None:
-            label = torch.from_numpy(label.astype(np.int).squeeze()).cuda(
-                non_blocking=True
-            )
+            label = torch.from_numpy(label.astype(np.int).squeeze()).cuda(non_blocking=True)
 
         len_part = len(idx_points)
         nearest_neighbor = len_part == 1
         pbar = tqdm(range(len(idx_points)))
         for idx_subcloud in pbar:
-            pbar.set_description(
-                f"Test on {cloud_idx}-th cloud [{idx_subcloud}]/[{len_part}]]"
-            )
+            pbar.set_description(f"Test on {cloud_idx}-th cloud [{idx_subcloud}]/[{len_part}]]")
             if not (nearest_neighbor and idx_subcloud > 0):
                 idx_part = idx_points[idx_subcloud]
                 coord_part = coord[idx_part]
@@ -799,9 +755,7 @@ def test(model, data_list, cfg, num_votes=1):
                         ).unsqueeze(0)
                     else:
                         data["heights"] = torch.from_numpy(
-                            coord_part[:, gravity_dim : gravity_dim + 1].astype(
-                                np.float32
-                            )
+                            coord_part[:, gravity_dim : gravity_dim + 1].astype(np.float32)
                         ).unsqueeze(0)
                 if not cfg.dataset.common.get("variable", False):
                     if "x" in data.keys():
@@ -846,9 +800,7 @@ def test(model, data_list, cfg, num_votes=1):
             pred = cfg.cmap[pred, :]
             # output pred labels
             if "s3dis" in dataset_name:
-                file_name = (
-                    f"{dataset_name}-Area{cfg.dataset.common.test_area}-{cloud_idx}"
-                )
+                file_name = f"{dataset_name}-Area{cfg.dataset.common.test_area}-{cloud_idx}"
             else:
                 file_name = f"{dataset_name}-{cloud_idx}"
 
@@ -872,9 +824,7 @@ def test(model, data_list, cfg, num_votes=1):
                 lower_half = (
                     pred & 0xFFFF
                 )  # get lower half for semantics (lower_half.shape) (100k+, )
-                lower_half = remap_lut_write[
-                    lower_half
-                ]  # do the remapping of semantics
+                lower_half = remap_lut_write[lower_half]  # do the remapping of semantics
                 pred = (upper_half << 16) + lower_half  # reconstruct full label
                 pred = pred.astype(np.uint32)
                 frame_id = data_path[0].split("/")[-1][:-4]
@@ -961,9 +911,7 @@ if __name__ == "__main__":
     cfg.task_name = args.cfg.split(".")[-2].split("/")[
         -2
     ]  # task/dataset name, \eg s3dis, modelnet40_cls
-    cfg.cfg_basename = args.cfg.split(".")[-2].split("/")[
-        -1
-    ]  # cfg_basename, \eg pointnext-xl
+    cfg.cfg_basename = args.cfg.split(".")[-2].split("/")[-1]  # cfg_basename, \eg pointnext-xl
     tags = [
         cfg.task_name,  # task name (the folder of name under ./cfgs
         cfg.mode,
@@ -990,9 +938,7 @@ if __name__ == "__main__":
         resume_exp_directory(cfg, pretrained_path=cfg.pretrained_path)
         cfg.wandb.tags = [cfg.mode]
     else:
-        generate_exp_directory(
-            cfg, tags, additional_id=os.environ.get("MASTER_PORT", None)
-        )
+        generate_exp_directory(cfg, tags, additional_id=os.environ.get("MASTER_PORT", None))
         cfg.wandb.tags = tags
     os.environ["JOB_LOG_DIR"] = cfg.log_dir
     cfg_path = os.path.join(cfg.run_dir, "cfg.yaml")
