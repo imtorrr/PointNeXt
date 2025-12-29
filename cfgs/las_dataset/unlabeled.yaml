@@ -1,0 +1,64 @@
+# LASDataset for unlabeled/inference data
+# For running predictions on new LAS/LAZ files without labels
+
+dataset:
+  common:
+    NAME: LASDataset
+    data_root: data/LAS_inference  # Separate folder for unlabeled data
+    tile_size: 6.0
+    tile_overlap: 0.5
+    voxel_size: 0.04
+    voxel_max: 80000
+    min_points_per_tile: 2000
+
+    # No labels for inference
+    label_field: null
+    label_offset: 0  # Not used for unlabeled data
+
+    # XYZ only (no additional features)
+    use_rgb: false
+    use_intensity: false
+    use_return_number: false
+
+  train:
+    split: train
+    loop: 1
+    presample: false
+    variable: false
+    shuffle: false
+
+  val:
+    split: val
+    presample: false
+    variable: false
+    shuffle: false
+
+  test:
+    split: test
+    presample: false
+    variable: false
+    shuffle: false
+
+# XYZ coordinates only
+feature_keys: pos
+
+batch_size: 1      # Process one tile at a time for inference
+val_batch_size: 1
+
+dataloader:
+  num_workers: 4
+  collate_fn: collate_to_pyg_batch  # Use PyG batching
+
+# Minimal transforms for inference (no augmentation)
+datatransforms:
+  train: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
+  val: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
+  test: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
+  kwargs:
+    num_points: 20000
+    gravity_dim: 2
+
+log_dir: 'las_dataset_inference'
+
+# Note: For inference, use the test.py script with a trained checkpoint
+# Example: python examples/segmentation/test.py --cfg cfgs/las_dataset/unlabeled.yaml --pretrained_path path/to/checkpoint.pth
