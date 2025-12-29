@@ -1,0 +1,94 @@
+# LASDataset configuration for FORinstanceV2 dataset
+# Norwegian forestry LiDAR data
+
+dataset:
+  common:
+    NAME: LASDataset
+    data_root: data/FORinstanceV2
+    tile_size: 6.0
+    tile_overlap: 0.5
+    voxel_size: 0.04
+    voxel_max: 80000
+    min_points_per_tile: 2000  # Skip tiles with fewer points during tiling
+
+    # Label configuration for FORinstance
+    label_field: classification  # Adjust if your LAS files use different field
+    label_offset: -1  # Map labels from [1,2,3] to [0,1,2]
+
+    # XYZ only
+    use_rgb: false
+    use_intensity: false
+    use_return_number: false
+
+  train:
+    split: train
+    loop: 30
+    presample: true
+    variable: false
+    shuffle: true
+
+  val:
+    split: val
+    presample: true
+    variable: false
+    shuffle: false
+
+  test:
+    split: test
+    presample: false
+    variable: false
+    shuffle: false
+
+# XYZ coordinates only
+feature_keys: pos
+
+# Update based on FORinstance classes
+num_classes: 4  # Update to match your actual number of classes
+batch_size: 4
+val_batch_size: 1
+
+dataloader:
+  num_workers: 6
+  collate_fn: collate_to_pyg_batch
+
+datatransforms:
+  train: [PointsToTensor, FixedPoints, RandomDropout, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
+  val: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
+  kwargs:
+    num_points: 20000
+    gravity_dim: 2
+    scale: [0.9, 1.1]
+    angle: [0.25, 0.25, 1]
+    jitter_sigma: 0.005
+    jitter_clip: 0.02
+    dropout_ratio: 0.2
+
+# Training
+val_fn: validate
+ignore_index: null
+epochs: 100
+
+cls_weighed_loss: false
+
+criterion_args:
+  NAME: CrossEntropy
+  label_smoothing: 0.2
+
+optimizer:
+  NAME: 'adamw'
+  weight_decay: 1.0e-4
+
+sched: cosine
+warmup_epochs: 0
+min_lr: 1.0e-5
+lr: 0.01
+
+grad_norm_clip: 10
+use_voting: false
+
+log_dir: 'forinstance_las'
+save_freq: -1
+val_freq: 1
+
+wandb:
+  project: PointNeXt-FORinstance
