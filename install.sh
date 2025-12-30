@@ -67,8 +67,20 @@ else
 fi
 
 echo ""
+# Install and configure Ninja build system for faster C++ builds
+log_info "Setting up Ninja build system for faster C++ compilation..."
+if ! command -v ninja &> /dev/null; then
+  uv pip install ninja
+  log_success "Ninja build system installed"
+else
+  log_info "Ninja build system already available"
+fi
+export CMAKE_GENERATOR=Ninja
+log_info "Configured to use Ninja for C++ extension builds"
+
+echo ""
 log_info "Building C++ extensions in parallel for faster compilation..."
-log_info "Using $MAX_JOBS parallel jobs"
+log_info "Using $MAX_JOBS parallel jobs with Ninja build system"
 echo ""
 
 # Status file for tracking progress
@@ -106,7 +118,7 @@ build_extension() {
   echo "BUILDING:$name" >> "$status_file"
 
   cd "$path" 2>&1 > "$log_file"
-  if pip install -e . --no-build-isolation >> "$log_file" 2>&1; then
+  if python setup.py install >> "$log_file" 2>&1; then
     echo "SUCCESS:$name" >> "$status_file"
   else
     echo "FAILED:$name:$required:$log_file" >> "$status_file"
@@ -115,6 +127,7 @@ build_extension() {
 
 export -f build_extension
 export STATUS_FILE
+export CMAKE_GENERATOR
 
 # Start monitoring progress in background
 (
@@ -132,7 +145,7 @@ export STATUS_FILE
     building=${building:-0}
     total=${#extensions[@]}
 
-    if [ "$completed" -ne "$prev_count" ] || [ "$building" -gt 0 ]; then
+    if [ $completed -ne $prev_count ] || [ $building -gt 0 ]; then
       # Move cursor up to redraw status
       if [ $prev_count -gt 0 ]; then
         tput cuu $((${#extensions[@]} + 1))
