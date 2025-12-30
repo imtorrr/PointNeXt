@@ -126,11 +126,13 @@ export STATUS_FILE
     fi
 
     # Count completed builds
-    completed=$(grep -c "SUCCESS:\|FAILED:" "$STATUS_FILE" 2>/dev/null || echo "0")
-    building=$(grep -c "BUILDING:" "$STATUS_FILE" 2>/dev/null || echo "0")
+    completed=$(grep -c "SUCCESS:\|FAILED:" "$STATUS_FILE" 2>/dev/null || echo 0)
+    completed=${completed:-0}
+    building=$(grep -c "BUILDING:" "$STATUS_FILE" 2>/dev/null || echo 0)
+    building=${building:-0}
     total=${#extensions[@]}
 
-    if [ $completed -ne $prev_count ] || [ $building -gt 0 ]; then
+    if [ "$completed" -ne "$prev_count" ] || [ "$building" -gt 0 ]; then
       # Move cursor up to redraw status
       if [ $prev_count -gt 0 ]; then
         tput cuu $((${#extensions[@]} + 1))
@@ -150,7 +152,10 @@ export STATUS_FILE
       done
 
       # Progress bar
-      percent=$((completed * 100 / total))
+      percent=0
+      if [ "$total" -gt 0 ]; then
+        percent=$((completed * 100 / total))
+      fi
       bar_width=40
       filled=$((percent * bar_width / 100))
       printf "\n  ["
