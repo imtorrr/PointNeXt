@@ -4,7 +4,7 @@
 dataset:
   common:
     NAME: LASDataset
-    data_root: data/LAS  # Root folder containing train/val/test subfolders
+    data_root: ../data/FORinstanceV2  # Root folder containing train/val/test subfolders
     tile_size: 6.0       # Tile size in meters
     tile_overlap: 0.5    # Overlap ratio (0-1)
     voxel_size: 0.04     # Voxel size for downsampling
@@ -43,7 +43,7 @@ dataset:
 feature_keys: pos  # Use only XYZ coordinates
 
 # Dataset info (update based on your data)
-num_classes: 4     # Number of classes (update for your dataset)
+num_classes: 3     # Number of classes (update for your dataset)
 batch_size: 4
 val_batch_size: 1
 

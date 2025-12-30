@@ -43,13 +43,12 @@ dataset:
 feature_keys: pos
 
 # Update based on FORinstance classes
-num_classes: 4  # Update to match your actual number of classes
+num_classes: 3  # Update to match your actual number of classes
 batch_size: 4
 val_batch_size: 1
 
 dataloader:
   num_workers: 6
-  collate_fn: collate_to_pyg_batch
 
 datatransforms:
   train: [PointsToTensor, FixedPoints, RandomDropout, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
