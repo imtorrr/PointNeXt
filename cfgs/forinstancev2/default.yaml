@@ -4,7 +4,7 @@
 dataset:
   common:
     NAME: LASDataset
-    data_root: ../data/LAS  # Root folder containing train/val/test subfolders
+    data_root: ../data/FORInstanceV2  # Root folder containing train/val/test subfolders
     tile_size: 6.0       # Tile size in meters
     tile_overlap: 0.5    # Overlap ratio (0-1)
     voxel_size: 0.04     # Voxel size for downsampling
@@ -12,8 +12,8 @@ dataset:
     min_points_per_tile: 2000  # Min points to keep a tile during tiling
 
     # Label configuration
-    label_field: classification  # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
-    label_offset: 0  # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
+    label_field: semantic_seg  # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
+    label_offset: -1  # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
 
     # Feature configuration
     use_rgb: false        # Include RGB colors
@@ -89,9 +89,9 @@ grad_norm_clip: 10
 use_voting: false
 
 # I/O
-log_dir: 'las_dataset'
+log_dir: 'forinstancev2'
 save_freq: -1  # -1: only save last and best
 val_freq: 1
 
 wandb:
-  project: PointNeXt-LAS
+  project: PointNeXt-FORInstanceV2
