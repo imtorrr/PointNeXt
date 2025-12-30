@@ -23,7 +23,20 @@ log_error() {
   echo -e "\e[31m[ERROR]\e[0m: $1"
 }
 
-export TORCH_CUDA_ARCH_LIST="5.0;6.0;7.0;7.5;8.0;8.6;9.0"
+# Optimize CUDA architectures for faster compilation (only common modern GPUs)
+# Adjust this list based on your target GPUs
+export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;9.0"
+
+# Enable parallel compilation - use all available CPU cores
+export MAX_JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 5)
+
+# Enable ccache if available for faster rebuilds
+if command -v ccache &> /dev/null; then
+  export CC="ccache gcc"
+  export CXX="ccache g++"
+  export CUDA_NVCC_EXECUTABLE="ccache nvcc"
+  log_info "ccache detected - build caching enabled for faster rebuilds"
+fi
 
 echo ""
 log_info "Updating git submodules..."
@@ -54,48 +67,64 @@ else
 fi
 
 echo ""
-log_info "Installing cpp extensions for pointnet++ library..."
-cd openpoints/cpp/pointnet2_batch
-python setup.py install
-if [ $? -eq 0 ]; then
-  log_success "pointnet2_batch cpp extensions installed successfully!"
-else
-  log_error "Failed to install pointnet2_batch cpp extensions. Check the output for errors."
-fi
-cd ..
+log_info "Building C++ extensions in parallel for faster compilation..."
+log_info "Using $MAX_JOBS parallel jobs"
 
-echo ""
-log_info "Installing pointops library (for Point Transformer and Stratified Transformer)..."
-cd pointops/
-python setup.py install
-if [ $? -eq 0 ]; then
-  log_success "pointops library installed successfully!"
-else
-  log_warning "Failed to install pointops library. This is only necessary if you need Point Transformer and Stratified Transformer."
-fi
-cd ..
+# Function to build a C++ extension
+build_extension() {
+  local name=$1
+  local path=$2
+  local required=$3
+  local log_file="/tmp/build_${name}.log"
 
-echo ""
-log_info "Installing chamfer_dist library (for reconstruction tasks)..."
-cd chamfer_dist/
-python setup.py install
-if [ $? -eq 0 ]; then
-  log_success "chamfer_dist library installed successfully!"
-else
-  log_warning "Failed to install chamfer_dist library. This is only necessary if you are interested in reconstruction tasks."
-fi
-cd ..
+  cd "$path" 2>&1 > "$log_file"
+  if pip install -e . --no-build-isolation >> "$log_file" 2>&1; then
+    echo "SUCCESS:$name"
+  else
+    echo "FAILED:$name:$required:$log_file"
+  fi
+}
 
+export -f build_extension
+export -f log_success
+export -f log_warning
+export -f log_error
+
+# Build all extensions in parallel
+cd openpoints/cpp
+results=$(
+  build_extension "pointnet2_batch" "pointnet2_batch" "required" &
+  build_extension "pointops" "pointops" "optional" &
+  build_extension "chamfer_dist" "chamfer_dist" "optional" &
+  build_extension "emd" "emd" "optional" &
+  build_extension "subsampling" "subsampling", "optional" &
+  wait
+)
+
+# Process results
+cd ../../..
 echo ""
-log_info "Installing emd library (for reconstruction tasks)..."
-cd emd/
-python setup.py install
-if [ $? -eq 0 ]; then
-  log_success "emd library installed successfully!"
-else
-  log_warning "Failed to install emd library. This is only necessary if you are interested in reconstruction tasks."
+has_errors=false
+
+while IFS= read -r line; do
+  if [[ $line == SUCCESS:* ]]; then
+    name="${line#SUCCESS:}"
+    log_success "$name installed successfully!"
+  elif [[ $line == FAILED:* ]]; then
+    IFS=':' read -r _ name required log_file <<< "$line"
+    if [[ $required == "required" ]]; then
+      log_error "Failed to install $name. Check $log_file for details."
+      has_errors=true
+    else
+      log_warning "Failed to install $name. This is optional. Check $log_file for details."
+    fi
+  fi
+done <<< "$results"
+
+if [ "$has_errors" = true ]; then
+  log_error "Required C++ extensions failed to build. Please check the logs."
+  exit 1
 fi
-cd ../../../
 
 echo ""
 log_info "Environment setup complete!"
