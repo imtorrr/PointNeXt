@@ -46,6 +46,7 @@ from openpoints.dataset import (
     build_dataloader_from_cfg,
     get_features_by_keys,
     get_class_weights,
+    get_class_alpha
 )
 from openpoints.dataset.data_util import voxelize
 from openpoints.dataset.semantic_kitti.semantickitti import (
@@ -255,7 +256,9 @@ def main(gpu, cfg):
 
     if num_classes is not None:
         assert cfg.num_classes == num_classes
-
+    else:
+        num_classes = cfg.num_classes
+        
     logging.info(f"number of classes of the dataset: {num_classes}")
     cfg.classes = (
         val_loader.dataset.classes
@@ -331,11 +334,17 @@ def main(gpu, cfg):
     )
     logging.info(f"length of training dataset: {len(train_loader.dataset)}")
 
-    cfg.criterion_args.weight = None
     if cfg.get("cls_weighed_loss", False):
         if hasattr(train_loader.dataset, "num_per_class"):
             cfg.criterion_args.weight = get_class_weights(
                 train_loader.dataset.num_per_class, normalize=True
+            )
+        else:
+            logging.info("`num_per_class` attribute is not founded in dataset")
+    elif cfg.get("cls_alpha_loss", False):
+        if hasattr(train_loader.dataset, "num_per_class"):
+            cfg.criterion_args.alpha = get_class_alpha(
+                train_loader.dataset.num_per_class
             )
         else:
             logging.info("`num_per_class` attribute is not founded in dataset")
