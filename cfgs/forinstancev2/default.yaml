@@ -3,8 +3,8 @@
 
 dataset:
   common:
-    NAME: LASDataset
-    data_root: ../data/FORInstanceV2  # Root folder containing train/val/test subfolders
+    NAME: FORInstanceV2
+    data_root: /workspace/FORInstanceV2  # Root folder containing train/val/test subfolders
     tile_size: 6.0       # Tile size in meters
     tile_overlap: 0.5    # Overlap ratio (0-1)
     voxel_size: 0.04     # Voxel size for downsampling
