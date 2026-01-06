@@ -41,8 +41,8 @@ feature_keys: pos  # Use only XYZ coordinates
 
 # Dataset info (update based on your data)
 num_classes: 3     # Number of classes (update for your dataset)
-batch_size: 4
-val_batch_size: 1
+batch_size: 64
+val_batch_size: 8
 
 dataloader:
   num_workers: 6
@@ -65,13 +65,14 @@ datatransforms:
 # Training configuration
 val_fn: validate
 ignore_index: null
-epochs: 100
+epochs: 300
 
-cls_weighed_loss: false
-cls_alpha_loss: true
+cls_weighed_loss: true
+cls_alpha_loss: false
 
 criterion_args:
-  NAME: FocalLoss
+  NAME: CrossEntropyLoss
+  label_smoothing: 0.1
 
 optimizer:
   NAME: 'adamw'
@@ -81,7 +82,7 @@ optimizer:
 sched: cosine
 warmup_epochs: 0
 min_lr: 1.0e-5
-lr: 0.0001
+lr: 0.001
 
 grad_norm_clip: 5
 use_voting: false
@@ -89,7 +90,7 @@ use_voting: false
 # I/O
 log_dir: 'forinstancev2'
 save_freq: -1  # -1: only save last and best
-val_freq: 1
+val_freq: 10
 
 wandb:
   project: PointNeXt-FORInstanceV2
