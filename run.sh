@@ -1,0 +1,1 @@
+uv run python examples/segmentation/main_pyg.py --cfg cfgs/forinstancev2/pointnext-xl-pyg.yaml
