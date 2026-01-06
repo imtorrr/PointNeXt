@@ -286,7 +286,10 @@ def main(gpu, cfg):
                 best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
                 data_list = generate_data_list(cfg)
                 logging.info(f"length of test dataset: {len(data_list)}")
-                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
+                if cfg.dataset.common.get("variable", False):
+                    test_miou, test_macc, test_oa, test_ious, test_accs, _ = test_pyg_variable(model, data_list, cfg)
+                else:
+                    test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)    
 
                 if test_miou is not None:
                     with np.printoptions(precision=2, suppress=True):

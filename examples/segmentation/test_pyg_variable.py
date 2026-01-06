@@ -77,6 +77,8 @@ def test_pyg_variable(model, data_list, cfg, num_votes=1):
 
         # Prepare PyG Data object
         data = {"pos": torch.from_numpy(coord.astype(np.float32))}
+        from copy import deepcopy
+        data["x"] = deepcopy(data["pos"])
         if feat is not None:
             data["x"] = torch.from_numpy(feat.astype(np.float32))
 
@@ -97,9 +99,6 @@ def test_pyg_variable(model, data_list, cfg, num_votes=1):
         # Move to GPU
         for key in data.keys():
             data[key] = data[key].cuda(non_blocking=True)
-
-        # Prepare features based on feature_keys
-        data["x"] = get_features_by_keys(data, cfg.feature_keys)
 
         # Convert to PyG Data format
         pyg_data = Data(**data)
