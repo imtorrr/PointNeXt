@@ -62,6 +62,7 @@ from openpoints.scheduler import build_scheduler_from_cfg
 from openpoints.loss import build_criterion_from_cfg
 from openpoints.models import build_model_from_cfg
 import warnings
+from test_pyg_variable import test_pyg_variable
 
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
@@ -112,11 +113,7 @@ def generate_data_list(cfg):
             os.path.join(cfg.dataset.common.data_root, "sequences"),
             str(cfg.dataset.test.test_id + 11),
         )[split_no]
-    elif "nibio_mls" in cfg.dataset.common.NAME.lower():
-        data_list = glob.glob(
-            os.path.join(cfg.dataset.common.data_root, "tiled", cfg.dataset.test.split, "*.npy")
-        )
-    elif "lasdataset" in cfg.dataset.common.NAME.lower():
+    elif any(name in cfg.dataset.common.NAME.lower() for name in ["nibio_mls", "lasdataset", "forinstance"]):
         data_list = glob.glob(
             os.path.join(cfg.dataset.common.data_root, "tiled", cfg.dataset.test.split, "*.npy")
         )
@@ -146,7 +143,7 @@ def load_data(data_path, cfg):
     elif "nibio_mls" in cfg.dataset.common.NAME.lower():
         data = np.load(data_path)
         coord, label = data[:, :3], data[:, 3:4]
-    elif "lasdataset" in cfg.dataset.common.NAME.lower():
+    elif any(name in cfg.dataset.common.NAME.lower() for name in ["lasdataset", "forinstance"]):
         data = np.load(data_path)
         coord = data[:, :3]
         # Handle optional features and labels
@@ -258,7 +255,6 @@ def main(gpu, cfg):
         assert cfg.num_classes == num_classes
     else:
         num_classes = cfg.num_classes
-        
     logging.info(f"number of classes of the dataset: {num_classes}")
     cfg.classes = (
         val_loader.dataset.classes
@@ -458,7 +454,11 @@ def main(gpu, cfg):
             )
         else:
             data_list = generate_data_list(cfg)
-            test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
+            # Use PyG-compatible test function for variable-sized data
+            if cfg.dataset.common.get("variable", False):
+                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test_pyg_variable(model, data_list, cfg)
+            else:
+                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
         with np.printoptions(precision=2, suppress=True):
             logging.info(
                 f"Best ckpt @E{best_epoch},  test_oa {test_oa:.2f}, test_macc {test_macc:.2f}, test_miou {test_miou:.2f}, "

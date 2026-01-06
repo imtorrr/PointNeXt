@@ -7,9 +7,10 @@ dataset:
     data_root: /workspace/FORInstanceV2  # Root folder containing train/val/test subfolders
     tile_size: 6.0       # Tile size in meters
     tile_overlap: 0.5    # Overlap ratio (0-1)
-    voxel_size: 0.04     # Voxel size for downsampling
+    voxel_size: 0.02     # Voxel size for downsampling
     voxel_max: 80000     # Max points per sample (null for no limit)
     min_points_per_tile: 2000  # Min points to keep a tile during tiling
+    variable: true
     # Label configuration
     label_field: semantic_seg  # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
     label_offset: -1  # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
@@ -21,21 +22,18 @@ dataset:
 
   train:
     split: train
-    loop: 1              # Loop through dataset 30 times per epoch
+    loop: 1              # Loop through dataset 1 times per epoch
     presample: true       # Presample and cache data
-    variable: false       # Fixed number of points
     shuffle: true         # Shuffle points
 
   val:
     split: val
     presample: true
-    variable: false
     shuffle: false
 
   test:
     split: test
     presample: false
-    variable: false
     shuffle: false
 
 # Feature keys (what to use as input)
@@ -54,6 +52,7 @@ dataloader:
 datatransforms:
   train: [PointsToTensor, FixedPoints, RandomDropout, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter]
   val: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
+  test: [PointsToTensor, PointCloudXYZAlign]
   kwargs:
     num_points: 20000
     gravity_dim: 2
