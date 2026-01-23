@@ -273,12 +273,12 @@ def main(gpu, cfg):
         else:
             if cfg.mode == "val":
                 best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
-                val_miou, val_macc, val_oa, val_ious, val_accs = validate_fn(
+                val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = validate_fn(
                     model, val_loader, cfg, num_votes=1, epoch=epoch
                 )
                 with np.printoptions(precision=2, suppress=True):
                     logging.info(
-                        f"Best ckpt @E{best_epoch},  val_oa , val_macc, val_miou: {val_oa:.2f} {val_macc:.2f} {val_miou:.2f}, "
+                        f"Best ckpt @E{best_epoch},  val_oa , val_macc, val_miou, val_loss: {val_oa:.2f} {val_macc:.2f} {val_miou:.2f} {val_loss:.4f}, "
                         f"\niou per cls is: {val_ious}"
                     )
                 return val_miou
@@ -355,7 +355,7 @@ def main(gpu, cfg):
     else:
         scaler = None
 
-    val_miou, val_macc, val_oa, val_ious, val_accs = 0.0, 0.0, 0.0, [], []
+    val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = 0.0, 0.0, 0.0, [], [], 0.0
     best_val, macc_when_best, oa_when_best, ious_when_best, best_epoch = (
         0.0,
         0.0,
@@ -385,9 +385,15 @@ def main(gpu, cfg):
 
         is_best = False
         if epoch % cfg.val_freq == 0:
-            val_miou, val_macc, val_oa, val_ious, val_accs = validate_fn(
+            val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = validate_fn(
                 model, val_loader, cfg, epoch=epoch, total_iter=total_iter
             )
+            # Always log validation metrics
+            with np.printoptions(precision=2, suppress=True):
+                logging.info(
+                    f"Epoch {epoch} Validation - val_loss {val_loss:.4f}, val_miou {val_miou:.2f}, val_macc {val_macc:.2f}, val_oa {val_oa:.2f}"
+                    f"\nmious: {val_ious}"
+                )
             if val_miou > best_val:
                 is_best = True
                 best_val = val_miou
@@ -408,6 +414,7 @@ def main(gpu, cfg):
         )
         if writer is not None:
             writer.add_scalar("best_val", best_val, epoch)
+            writer.add_scalar("val_loss", val_loss, epoch)
             writer.add_scalar("val_miou", val_miou, epoch)
             writer.add_scalar("macc_when_best", macc_when_best, epoch)
             writer.add_scalar("oa_when_best", oa_when_best, epoch)
@@ -479,7 +486,7 @@ def main(gpu, cfg):
                 pretrained_path=os.path.join(cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"),
             )
             set_random_seed(cfg.seed)
-            val_miou, val_macc, val_oa, val_ious, val_accs = validate_fn(
+            val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = validate_fn(
                 model,
                 val_loader,
                 cfg,
@@ -489,6 +496,7 @@ def main(gpu, cfg):
             )
             if writer is not None:
                 writer.add_scalar("val_miou20", val_miou, cfg.epochs + 50)
+                writer.add_scalar("val_loss20", val_loss, cfg.epochs + 50)
 
             ious_table = [f"{item:.2f}" for item in val_ious]
             data = (
@@ -588,6 +596,8 @@ def train_one_epoch(
 def validate(model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1, total_iter=-1):
     model.eval()  # set model to eval mode
     cm = ConfusionMatrix(num_classes=cfg.num_classes, ignore_index=cfg.ignore_index)
+    loss_meter = AverageMeter()
+    criterion = build_criterion_from_cfg(cfg.criterion_args).cuda()
     pbar = tqdm(enumerate(val_loader), total=val_loader.__len__(), desc="Val")
     for idx, data in pbar:
         keys = data.keys() if callable(data.keys) else data.keys
@@ -599,6 +609,15 @@ def validate(model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1,
         data["iter"] = total_iter
         data = Data(**data)
         logits = model(data)
+
+        # Compute validation loss
+        loss = (
+            criterion(logits, target)
+            if "mask" not in cfg.criterion_args.NAME.lower()
+            else criterion(logits, target, data["mask"])
+        )
+        loss_meter.update(loss.item())
+
         if "mask" not in cfg.criterion_args.NAME or cfg.get("use_maks", False):
             cm.update(logits.argmax(dim=1), target)
         else:
@@ -628,7 +647,7 @@ def validate(model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1,
     if cfg.distributed:
         dist.all_reduce(tp), dist.all_reduce(union), dist.all_reduce(count)
     miou, macc, oa, ious, accs = get_mious(tp, union, count)
-    return miou, macc, oa, ious, accs
+    return miou, macc, oa, ious, accs, loss_meter.avg
 
 
 @torch.no_grad()

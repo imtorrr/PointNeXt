@@ -132,7 +132,7 @@ def test_pyg_variable(model, data_list, cfg, num_votes=1):
 
     miou, macc, oa, ious, accs = get_mious(tp, union, count)
 
-    return miou, macc, oa, ious, accs, all_cm.confusion_matrix
+    return miou, macc, oa, ious, accs, all_cm
 
 
 def load_tile_data(data_path, cfg):
