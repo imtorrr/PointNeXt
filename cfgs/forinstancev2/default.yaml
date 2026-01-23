@@ -8,7 +8,7 @@ dataset:
     tile_size: 6.0       # Tile size in meters
     tile_overlap: 0.5    # Overlap ratio (0-1)
     voxel_size: 0.02     # Voxel size for downsampling
-    voxel_max: 80000     # Max points per sample (null for no limit)
+    voxel_max: 30000     # Max points per sample (null for no limit)
     min_points_per_tile: 2000  # Min points to keep a tile during tiling
     variable: true
     # Label configuration
@@ -45,7 +45,7 @@ batch_size: 64
 val_batch_size: 8
 
 dataloader:
-  num_workers: 6
+  num_workers: 8
   collate_fn: collate_to_pyg_batch  # Use PyG batching
 
 # Data augmentation
@@ -88,6 +88,7 @@ grad_norm_clip: 5
 use_voting: false
 
 # I/O
+root_dir: '/workspace/log/'
 log_dir: 'forinstancev2'
 save_freq: -1  # -1: only save last and best
 val_freq: 10

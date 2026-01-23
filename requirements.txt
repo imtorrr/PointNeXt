@@ -27,4 +27,8 @@ setuptools
 pandas
 deepspeed
 shortuuid
-
+ipywidgets
+vtk
+trame
+trame-vtk
+trame-vuetify
