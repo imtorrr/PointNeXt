@@ -9,16 +9,16 @@ dataset:
   train:
     split: train
     voxel_max: 10000
-    loop: 1  # here, the training has been looped 30 times. therefore, the training epochs do not need much.
+    loop: 1 # here, the training has been looped 30 times. therefore, the training epochs do not need much.
     presample: False
   val:
     split: val
     voxel_max: 10000
-    presample: False 
+    presample: False
   test:
     split: test
     voxel_max: null
-    presample: False 
+    presample: False
 
 feature_keys: x,heights
 num_classes: 13
@@ -29,7 +29,17 @@ dataloader:
   num_workers: 6
 
 datatransforms:
-  train: [ChromaticAutoContrast, PointsToTensor, PointCloudScaling, PointCloudXYZAlign, PointCloudRotation, PointCloudJitter, ChromaticDropGPU, ChromaticNormalize]
+  train:
+    [
+      ChromaticAutoContrast,
+      PointsToTensor,
+      PointCloudScaling,
+      PointCloudXYZAlign,
+      PointCloudRotation,
+      PointCloudJitter,
+      ChromaticDropGPU,
+      ChromaticNormalize,
+    ]
   val: [PointsToTensor, PointCloudXYZAlign, ChromaticNormalize]
   vote: [ChromaticDropGPU]
   kwargs:
@@ -44,7 +54,7 @@ datatransforms:
 # Training cfgs
 # ---------------------------------------------------------------------------- #
 val_fn: validate
-ignore_index: null 
+ignore_index: null
 epochs: 100
 
 cls_weighed_loss: False
@@ -54,8 +64,8 @@ criterion_args:
   label_smoothing: 0.2
 
 optimizer:
- NAME: 'adamw'  # performs 1 point better than adam
- weight_decay: 1.0e-4
+  NAME: "adamw" # performs 1 point better than adam
+  weight_decay: 1.0e-4
 
 # lr_scheduler:
 sched: cosine
@@ -69,8 +79,8 @@ use_voting: False
 # ---------------------------------------------------------------------------- #
 # io and misc
 # ---------------------------------------------------------------------------- #
-log_dir: 's3dis'
-save_freq: -1 # save epoch every xxx epochs, -1 only save last and best. 
+log_dir: "s3dis"
+save_freq: -1 # save epoch every xxx epochs, -1 only save last and best.
 val_freq: 1
 
 wandb:

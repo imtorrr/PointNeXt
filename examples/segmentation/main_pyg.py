@@ -8,6 +8,7 @@ if you only wana use 1 GPU, set `CUDA_VISIBLE_DEVICES` accordingly
 import sys
 import os
 
+
 sys.path.append(os.path.abspath("."))
 
 
@@ -46,8 +47,9 @@ from openpoints.dataset import (
     build_dataloader_from_cfg,
     get_features_by_keys,
     get_class_weights,
-    get_class_alpha
+    get_class_alpha,
 )
+from openpoints.dataset.vis3d import write_obj
 from openpoints.dataset.data_util import voxelize
 from openpoints.dataset.semantic_kitti.semantickitti import (
     load_label_kitti,
@@ -113,9 +115,14 @@ def generate_data_list(cfg):
             os.path.join(cfg.dataset.common.data_root, "sequences"),
             str(cfg.dataset.test.test_id + 11),
         )[split_no]
-    elif any(name in cfg.dataset.common.NAME.lower() for name in ["nibio_mls", "lasdataset", "forinstance"]):
+    elif any(
+        name in cfg.dataset.common.NAME.lower()
+        for name in ["nibio_mls", "lasdataset", "forinstance"]
+    ):
         data_list = glob.glob(
-            os.path.join(cfg.dataset.common.data_root, "tiled", cfg.dataset.test.split, "*.npy")
+            os.path.join(
+                cfg.dataset.common.data_root, "tiled", cfg.dataset.test.split, "*.npy"
+            )
         )
     else:
         raise Exception("dataset not supported yet")
@@ -143,7 +150,10 @@ def load_data(data_path, cfg):
     elif "nibio_mls" in cfg.dataset.common.NAME.lower():
         data = np.load(data_path)
         coord, label = data[:, :3], data[:, 3:4]
-    elif any(name in cfg.dataset.common.NAME.lower() for name in ["lasdataset", "forinstance"]):
+    elif any(
+        name in cfg.dataset.common.NAME.lower()
+        for name in ["lasdataset", "forinstance"]
+    ):
         data = np.load(data_path)
         coord = data[:, :3]
         # Handle optional features and labels
@@ -179,8 +189,12 @@ def load_data(data_path, cfg):
             idx_part = idx_sort[idx_select]
             npoints_subcloud = voxel_idx.max() + 1
             idx_shuffle = np.random.permutation(npoints_subcloud)
-            idx_part = idx_part[idx_shuffle]  # idx_part: randomly sampled points of a voxel
-            reverse_idx_part = np.argsort(idx_shuffle, axis=0)  # revevers idx_part to sorted
+            idx_part = idx_part[
+                idx_shuffle
+            ]  # idx_part: randomly sampled points of a voxel
+            reverse_idx_part = np.argsort(
+                idx_shuffle, axis=0
+            )  # revevers idx_part to sorted
             idx_points.append(idx_part)
             reverse_idx_sort = np.argsort(idx_sort, axis=0)
         else:
@@ -248,7 +262,9 @@ def main(gpu, cfg):
     )
     logging.info(f"length of validation dataset: {len(val_loader.dataset)}")
     num_classes = (
-        val_loader.dataset.num_classes if hasattr(val_loader.dataset, "num_classes") else None
+        val_loader.dataset.num_classes
+        if hasattr(val_loader.dataset, "num_classes")
+        else None
     )
 
     if num_classes is not None:
@@ -261,7 +277,11 @@ def main(gpu, cfg):
         if hasattr(val_loader.dataset, "classes")
         else np.arange(num_classes)
     )
-    cfg.cmap = np.array(val_loader.dataset.cmap) if hasattr(val_loader.dataset, "cmap") else None
+    cfg.cmap = (
+        np.array(val_loader.dataset.cmap)
+        if hasattr(val_loader.dataset, "cmap")
+        else None
+    )
 
     validate_fn = validate
 
@@ -269,12 +289,16 @@ def main(gpu, cfg):
     model_module = model.module if hasattr(model, "module") else model
     if cfg.pretrained_path is not None:
         if cfg.mode == "resume":
-            resume_checkpoint(cfg, model, optimizer, scheduler, pretrained_path=cfg.pretrained_path)
+            resume_checkpoint(
+                cfg, model, optimizer, scheduler, pretrained_path=cfg.pretrained_path
+            )
         else:
             if cfg.mode == "val":
-                best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
+                best_epoch, best_val = load_checkpoint(
+                    model, pretrained_path=cfg.pretrained_path
+                )
                 val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = validate_fn(
-                    model, val_loader, cfg, num_votes=1, epoch=epoch
+                    model, val_loader, cfg, num_votes=1
                 )
                 with np.printoptions(precision=2, suppress=True):
                     logging.info(
@@ -283,13 +307,28 @@ def main(gpu, cfg):
                     )
                 return val_miou
             elif cfg.mode == "test":
-                best_epoch, best_val = load_checkpoint(model, pretrained_path=cfg.pretrained_path)
-                data_list = generate_data_list(cfg)
-                logging.info(f"length of test dataset: {len(data_list)}")
+                best_epoch, best_val = load_checkpoint(
+                    model, pretrained_path=cfg.pretrained_path
+                )
                 if cfg.dataset.common.get("variable", False):
-                    test_miou, test_macc, test_oa, test_ious, test_accs, _ = test_pyg_variable(model, data_list, cfg)
+                    test_loader = build_dataloader_from_cfg(
+                        cfg.get("test_batch_size", cfg.batch_size),
+                        cfg.dataset,
+                        cfg.dataloader,
+                        datatransforms_cfg=cfg.datatransforms,
+                        split="test",
+                        distributed=cfg.distributed,
+                    )
+                    logging.info(f"length of test dataset: {len(test_loader.dataset)}")
+                    test_miou, test_macc, test_oa, test_ious, test_accs, _ = (
+                        test_pyg_variable(model, test_loader, cfg)
+                    )
                 else:
-                    test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)    
+                    data_list = generate_data_list(cfg)
+                    logging.info(f"length of test dataset: {len(data_list)}")
+                    test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(
+                        model, data_list, cfg
+                    )
 
                 if test_miou is not None:
                     with np.printoptions(precision=2, suppress=True):
@@ -298,7 +337,9 @@ def main(gpu, cfg):
                             f"\niou per cls is: {test_ious}"
                         )
                     cfg.csv_path = os.path.join(cfg.run_dir, cfg.run_name + "_test.csv")
-                    write_to_csv(test_oa, test_macc, test_miou, test_ious, best_epoch, cfg)
+                    write_to_csv(
+                        test_oa, test_macc, test_miou, test_ious, best_epoch, cfg
+                    )
                 return test_miou
 
             elif "encoder" in cfg.mode:
@@ -315,7 +356,9 @@ def main(gpu, cfg):
 
             else:
                 logging.info(f"Finetuning from {cfg.pretrained_path}")
-                load_checkpoint(model, cfg.pretrained_path, cfg.get("pretrained_module", None))
+                load_checkpoint(
+                    model, cfg.pretrained_path, cfg.get("pretrained_module", None)
+                )
     else:
         logging.info("Training from scratch")
 
@@ -355,7 +398,14 @@ def main(gpu, cfg):
     else:
         scaler = None
 
-    val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = 0.0, 0.0, 0.0, [], [], 0.0
+    val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = (
+        0.0,
+        0.0,
+        0.0,
+        [],
+        [],
+        0.0,
+    )
     best_val, macc_when_best, oa_when_best, ious_when_best, best_epoch = (
         0.0,
         0.0,
@@ -371,16 +421,18 @@ def main(gpu, cfg):
             train_loader.dataset, "epoch"
         ):  # some dataset sets the dataset length as a fixed steps.
             train_loader.dataset.epoch = epoch - 1
-        train_loss, train_miou, train_macc, train_oa, _, _, total_iter = train_one_epoch(
-            model,
-            train_loader,
-            criterion,
-            optimizer,
-            scheduler,
-            scaler,
-            epoch,
-            total_iter,
-            cfg,
+        train_loss, train_miou, train_macc, train_oa, train_ious, _, total_iter = (
+            train_one_epoch(
+                model,
+                train_loader,
+                criterion,
+                optimizer,
+                scheduler,
+                scaler,
+                epoch,
+                total_iter,
+                cfg,
+            )
         )
 
         is_best = False
@@ -394,6 +446,9 @@ def main(gpu, cfg):
                     f"Epoch {epoch} Validation - val_loss {val_loss:.4f}, val_miou {val_miou:.2f}, val_macc {val_macc:.2f}, val_oa {val_oa:.2f}"
                     f"\nmious: {val_ious}"
                 )
+            if writer is not None:
+                for i, class_name in enumerate(cfg.classes):
+                    writer.add_scalar(f"iou_{class_name}/val", val_ious[i], epoch)
             if val_miou > best_val:
                 is_best = True
                 best_val = val_miou
@@ -424,6 +479,9 @@ def main(gpu, cfg):
             writer.add_scalar("train_miou", train_miou, epoch)
             writer.add_scalar("train_macc", train_macc, epoch)
             writer.add_scalar("lr", lr, epoch)
+
+            for i, class_name in enumerate(cfg.classes):
+                writer.add_scalar(f"iou_{class_name}/train", train_ious[i], epoch)
 
         if cfg.sched_on_epoch:
             scheduler.step(epoch)
@@ -463,12 +521,24 @@ def main(gpu, cfg):
                 model, val_loader, cfg, epoch=epoch
             )
         else:
-            data_list = generate_data_list(cfg)
             # Use PyG-compatible test function for variable-sized data
             if cfg.dataset.common.get("variable", False):
-                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test_pyg_variable(model, data_list, cfg)
+                test_loader = build_dataloader_from_cfg(
+                    cfg.get("test_batch_size", cfg.batch_size),
+                    cfg.dataset,
+                    cfg.dataloader,
+                    datatransforms_cfg=cfg.datatransforms,
+                    split="test",
+                    distributed=cfg.distributed,
+                )
+                test_miou, test_macc, test_oa, test_ious, test_accs, _ = (
+                    test_pyg_variable(model, test_loader, cfg)
+                )
             else:
-                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(model, data_list, cfg)
+                data_list = generate_data_list(cfg)
+                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(
+                    model, data_list, cfg
+                )
         with np.printoptions(precision=2, suppress=True):
             logging.info(
                 f"Best ckpt @E{best_epoch},  test_oa {test_oa:.2f}, test_macc {test_macc:.2f}, test_miou {test_miou:.2f}, "
@@ -478,12 +548,16 @@ def main(gpu, cfg):
             writer.add_scalar("test_miou", test_miou, epoch)
             writer.add_scalar("test_macc", test_macc, epoch)
             writer.add_scalar("test_oa", test_oa, epoch)
-        write_to_csv(test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True)
+        write_to_csv(
+            test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True
+        )
         logging.info(f"save results in {cfg.csv_path}")
         if cfg.use_voting:
             load_checkpoint(
                 model,
-                pretrained_path=os.path.join(cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"),
+                pretrained_path=os.path.join(
+                    cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"
+                ),
             )
             set_random_seed(cfg.seed)
             val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = validate_fn(
@@ -564,7 +638,9 @@ def train_one_epoch(
         # optimize
         if num_iter == cfg.step_per_update:
             if cfg.get("grad_norm_clip") is not None and cfg.grad_norm_clip > 0.0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.grad_norm_clip, norm_type=2)
+                torch.nn.utils.clip_grad_norm_(
+                    model.parameters(), cfg.grad_norm_clip, norm_type=2
+                )
             num_iter = 0
 
             if cfg.use_amp:
@@ -593,7 +669,9 @@ def train_one_epoch(
 
 
 @torch.no_grad()
-def validate(model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1, total_iter=-1):
+def validate(
+    model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1, total_iter=-1
+):
     model.eval()  # set model to eval mode
     cm = ConfusionMatrix(num_classes=cfg.num_classes, ignore_index=cfg.ignore_index)
     loss_meter = AverageMeter()
@@ -624,17 +702,20 @@ def validate(model, val_loader, cfg, num_votes=1, data_transform=None, epoch=-1,
             mask = data["mask"].bool()
             cm.update(logits.argmax(dim=1)[mask], target[mask])
 
-        """visualization in debug mode
-        from openpoints.dataset.vis3d import vis_points, vis_multi_points
-        coord = data['pos'].cpu().numpy()[0]
-        pred = logits.argmax(dim=1)[0].cpu().numpy()
-        label = target[0].cpu().numpy()
-        if cfg.ignore_index is not None:
-            if (label == cfg.ignore_index).sum() > 0:
-                pred[label == cfg.ignore_index] = cfg.num_classes
-                label[label == cfg.ignore_index] = cfg.num_classes
-        vis_multi_points([coord, coord], labels=[label, pred])
-        """
+        # pred = logits.argmax(dim=1).cpu().numpy()
+        # label = target.cpu().numpy()
+        # if cfg.ignore_index is not None:
+        #     if (label == cfg.ignore_index).sum() > 0:
+        #         pred[label == cfg.ignore_index] = cfg.num_classes
+        #         label[label == cfg.ignore_index] = cfg.num_classes
+
+        # from openpoints.dataset.vis3d import vis_multi_points
+        # vis_multi_points(
+        #     [coord, coord],
+        #     labels=[label, pred],
+        #     save_fig=True,
+        #     save_name=f"debug/{idx}",
+        # )
         # tp, union, count = cm.tp, cm.union, cm.count
         # if cfg.distributed:
         #     dist.all_reduce(tp), dist.all_reduce(union), dist.all_reduce(count)
@@ -706,11 +787,13 @@ def test(model, data_list, cfg, num_votes=1):
         all_logits = []
 
         # Load full raw tile (can be 100K+ points)
-        coord, feat, label, idx_points, voxel_idx, reverse_idx_part, reverse_idx = load_data(
-            data_path, cfg
+        coord, feat, label, idx_points, voxel_idx, reverse_idx_part, reverse_idx = (
+            load_data(data_path, cfg)
         )
         if label is not None:
-            label = torch.from_numpy(label.astype(np.int).squeeze()).cuda(non_blocking=True)
+            label = torch.from_numpy(label.astype(np.int).squeeze()).cuda(
+                non_blocking=True
+            )
             # Apply label offset if configured
             if cfg.dataset.common.get("label_offset", 0) != 0:
                 label = label + cfg.dataset.common.label_offset
@@ -720,7 +803,9 @@ def test(model, data_list, cfg, num_votes=1):
         pbar = tqdm(range(len(idx_points)))
 
         for idx_subcloud in pbar:
-            pbar.set_description(f"Test on {cloud_idx}-th cloud [{idx_subcloud}]/[{len_part}]]")
+            pbar.set_description(
+                f"Test on {cloud_idx}-th cloud [{idx_subcloud}]/[{len_part}]]"
+            )
             if not (nearest_neighbor and idx_subcloud > 0):
                 idx_part = idx_points[idx_subcloud]
                 coord_part = coord[idx_part]
@@ -742,7 +827,9 @@ def test(model, data_list, cfg, num_votes=1):
                         ).unsqueeze(0)
                     else:
                         data["heights"] = torch.from_numpy(
-                            coord_part[:, gravity_dim : gravity_dim + 1].astype(np.float32)
+                            coord_part[:, gravity_dim : gravity_dim + 1].astype(
+                                np.float32
+                            )
                         ).unsqueeze(0)
                 if not cfg.dataset.common.get("variable", False):
                     if "x" in data.keys():
@@ -785,7 +872,9 @@ def test(model, data_list, cfg, num_votes=1):
             pred_vis = cfg.cmap[pred_vis, :]
             # output pred labels
             if "s3dis" in dataset_name:
-                file_name = f"{dataset_name}-Area{cfg.dataset.common.test_area}-{cloud_idx}"
+                file_name = (
+                    f"{dataset_name}-Area{cfg.dataset.common.test_area}-{cloud_idx}"
+                )
             else:
                 file_name = f"{dataset_name}-{cloud_idx}"
 
@@ -806,10 +895,10 @@ def test(model, data_list, cfg, num_votes=1):
                 pred_save = pred_save.cpu().numpy().squeeze()
                 pred_save = pred_save.astype(np.uint32)
                 upper_half = pred_save >> 16  # get upper half for instances
-                lower_half = (
-                    pred_save & 0xFFFF
-                )  # get lower half for semantics
-                lower_half = remap_lut_write[lower_half]  # do the remapping of semantics
+                lower_half = pred_save & 0xFFFF  # get lower half for semantics
+                lower_half = remap_lut_write[
+                    lower_half
+                ]  # do the remapping of semantics
                 pred_save = (upper_half << 16) + lower_half  # reconstruct full label
                 pred_save = pred_save.astype(np.uint32)
                 frame_id = data_path[0].split("/")[-1][:-4]
@@ -818,9 +907,26 @@ def test(model, data_list, cfg, num_votes=1):
             elif "scannet" in cfg.dataset.common.NAME.lower():
                 pred_save = pred.cpu().numpy().squeeze()
                 label_int_mapping = {
-                    0: 1, 1: 2, 2: 3, 3: 4, 4: 5, 5: 6, 6: 7, 7: 8, 8: 9, 9: 10,
-                    10: 11, 11: 12, 12: 14, 13: 16, 14: 24, 15: 28, 16: 33, 17: 34,
-                    18: 36, 19: 39,
+                    0: 1,
+                    1: 2,
+                    2: 3,
+                    3: 4,
+                    4: 5,
+                    5: 6,
+                    6: 7,
+                    7: 8,
+                    8: 9,
+                    9: 10,
+                    10: 11,
+                    11: 12,
+                    12: 14,
+                    13: 16,
+                    14: 24,
+                    15: 28,
+                    16: 33,
+                    17: 34,
+                    18: 36,
+                    19: 39,
                 }
                 pred_save = np.vectorize(label_int_mapping.get)(pred_save)
                 save_file_name = data_path.split("/")[-1].split("_")
@@ -833,7 +939,9 @@ def test(model, data_list, cfg, num_votes=1):
                 # Reverse label offset if it was applied
                 if cfg.dataset.common.get("label_offset", 0) != 0:
                     pred_save = pred_save - cfg.dataset.common.label_offset
-                save_file_name = os.path.basename(data_path).replace(".npy", "_pred.npy")
+                save_file_name = os.path.basename(data_path).replace(
+                    ".npy", "_pred.npy"
+                )
                 save_file_name = os.path.join(cfg.save_path, save_file_name)
                 np.save(save_file_name, pred_save)
 
@@ -888,7 +996,9 @@ if __name__ == "__main__":
     cfg.task_name = args.cfg.split(".")[-2].split("/")[
         -2
     ]  # task/dataset name, \eg s3dis, modelnet40_cls
-    cfg.cfg_basename = args.cfg.split(".")[-2].split("/")[-1]  # cfg_basename, \eg pointnext-xl
+    cfg.cfg_basename = args.cfg.split(".")[-2].split("/")[
+        -1
+    ]  # cfg_basename, \eg pointnext-xl
     tags = [
         cfg.task_name,  # task name (the folder of name under ./cfgs
         cfg.mode,
@@ -915,7 +1025,9 @@ if __name__ == "__main__":
         resume_exp_directory(cfg, pretrained_path=cfg.pretrained_path)
         cfg.wandb.tags = [cfg.mode]
     else:
-        generate_exp_directory(cfg, tags, additional_id=os.environ.get("MASTER_PORT", None))
+        generate_exp_directory(
+            cfg, tags, additional_id=os.environ.get("MASTER_PORT", None)
+        )
         cfg.wandb.tags = tags
     os.environ["JOB_LOG_DIR"] = cfg.log_dir
     cfg_path = os.path.join(cfg.run_dir, "cfg.yaml")

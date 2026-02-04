@@ -1,5 +1,7 @@
-# LASDataset Default Configuration
+# LASDataset Configuration with HAG (Height Above Ground)
 # Universal dataset for LAS/LAZ point cloud files with automatic tiling
+# This configuration uses XYZ + HAG features (4 channels total)
+
 dataset:
   common:
     NAME: FORInstanceV2
@@ -15,7 +17,7 @@ dataset:
     label_offset: -1 # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
 
     # Feature configuration
-    use_approximate_hag: false # Do not include HAG - using only XYZ
+    use_approximate_hag: true # Include approximate HAG (grid_size=5)
     use_rgb: false # Include RGB colors
     use_intensity: false # Include intensity values
     use_return_number: false # Include return number info
@@ -23,12 +25,12 @@ dataset:
   train:
     split: train
     loop: 1 # Loop through dataset 1 times per epoch
-    presample: false # Presample and cache data
+    presample: true # Presample and cache data
     shuffle: true # Shuffle points
 
   val:
     split: val
-    presample: false
+    presample: true
     shuffle: false
 
   test:
@@ -37,7 +39,7 @@ dataset:
     shuffle: false
 
 # Feature keys (what to use as input)
-feature_keys: pos # Use only XYZ coordinates (3 channels)
+feature_keys: pos,x # Use XYZ + HAG (4 channels: 3 pos + 1 HAG)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
@@ -89,7 +91,7 @@ optimizer:
 
 # Learning rate scheduler
 sched: cosine
-warmup_epochs: 30
+warmup_epochs: 10
 min_lr: 1.0e-5
 lr: 0.001
 
@@ -98,9 +100,9 @@ use_voting: false
 
 # I/O
 root_dir: "log/"
-log_dir: "forinstancev2"
+log_dir: "forinstancev2-hag"
 save_freq: -1 # -1: only save last and best
 val_freq: 10
 
 wandb:
-  project: PointNeXt-FORInstanceV2
+  project: PointNeXt-FORInstanceV2-HAG
