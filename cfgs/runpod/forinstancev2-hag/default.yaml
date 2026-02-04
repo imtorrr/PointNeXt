@@ -5,7 +5,7 @@
 dataset:
   common:
     NAME: FORInstanceV2
-    data_root: data/FORInstanceV2 # Root folder containing train/val/test subfolders
+    data_root: /workspace/FORInstanceV2 # Root folder containing train/val/test subfolders
     tile_size: 6.0 # Tile size in meters
     tile_overlap: 0.5 # Overlap ratio (0-1)
     voxel_size: 0.02 # Voxel size for downsampling
@@ -43,9 +43,9 @@ feature_keys: pos,x # Use XYZ + HAG (4 channels: 3 pos + 1 HAG)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
-batch_size: 16
-val_batch_size: 2
-test_batch_size: 2
+batch_size: 64
+val_batch_size: 8
+test_batch_size: 8
 
 dataloader:
   num_workers: 4
@@ -99,7 +99,7 @@ grad_norm_clip: 5
 use_voting: false
 
 # I/O
-root_dir: "log/"
+root_dir: "/workspace/log/"
 log_dir: "forinstancev2-hag"
 save_freq: -1 # -1: only save last and best
 val_freq: 10

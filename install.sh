@@ -59,7 +59,7 @@ log_info "Creating virtual environment using uv..."
 uv venv --python 3.12
 source .venv/bin/activate
 log_info "Installing dependencies from requirements.txt using uv..."
-uv pip install -r requirements.txt
+uv pip install setuptools -r requirements.txt
 if [ $? -eq 0 ]; then
   log_success "Dependencies installed successfully!"
 else
@@ -129,6 +129,10 @@ export -f build_extension
 export STATUS_FILE
 export CMAKE_GENERATOR
 
+# Capture extension names and count before the subshell (associative arrays don't export)
+EXT_NAMES=(${!extensions[@]})
+EXT_TOTAL=${#extensions[@]}
+
 # Start monitoring progress in background
 (
   prev_count=0
@@ -143,16 +147,16 @@ export CMAKE_GENERATOR
     completed=${completed:-0}
     building=$(grep -c "BUILDING:" "$STATUS_FILE" 2>/dev/null || echo 0)
     building=${building:-0}
-    total=${#extensions[@]}
+    total=$EXT_TOTAL
 
-    if [ $completed -ne $prev_count ] || [ $building -gt 0 ]; then
+    if [ "$completed" -ne "$prev_count" ] || [ "$building" -gt 0 ]; then
       # Move cursor up to redraw status
-      if [ $prev_count -gt 0 ]; then
-        tput cuu $((${#extensions[@]} + 1))
+      if [ "$prev_count" -gt 0 ]; then
+        tput cuu $(( EXT_TOTAL + 1 ))
       fi
 
       # Display current status
-      for name in "${!extensions[@]}"; do
+      for name in "${EXT_NAMES[@]}"; do
         if grep -q "SUCCESS:$name" "$STATUS_FILE" 2>/dev/null; then
           echo -e "  \e[32m✓\e[0m $name ... \e[32mcomplete\e[0m          "
         elif grep -q "FAILED:$name" "$STATUS_FILE" 2>/dev/null; then
@@ -180,7 +184,7 @@ export CMAKE_GENERATOR
     fi
 
     # Exit when all complete
-    if [ $completed -eq $total ]; then
+    if [ "$completed" -eq "$total" ]; then
       break
     fi
 
