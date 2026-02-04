@@ -47,23 +47,23 @@ get_config_choice() {
     local config_path=""
 
     while true; do
-        echo -e "${BOLD}Select a configuration file (enter number or 'C' for custom):${NC} "
+        echo -e "${BOLD}Select a configuration file (enter number or 'C' for custom):${NC} " >&2
         read -r choice
 
         if [[ "$choice" == "C" ]] || [[ "$choice" == "c" ]]; then
-            echo -e "${BOLD}Enter the full path to your config file:${NC} "
+            echo -e "${BOLD}Enter the full path to your config file:${NC} " >&2
             read -r custom_path
             if [[ -f "$custom_path" ]]; then
                 config_path="$custom_path"
                 break
             else
-                echo -e "${RED}Error: File not found. Please try again.${NC}\n"
+                echo -e "${RED}Error: File not found. Please try again.${NC}\n" >&2
             fi
         elif [[ "$choice" =~ ^[0-9]+$ ]] && [[ "$choice" -ge 1 ]] && [[ "$choice" -le "${#configs[@]}" ]]; then
             config_path="${configs[$((choice-1))]}"
             break
         else
-            echo -e "${RED}Invalid choice. Please enter a valid number or 'C'.${NC}\n"
+            echo -e "${RED}Invalid choice. Please enter a valid number or 'C'.${NC}\n" >&2
         fi
     done
 

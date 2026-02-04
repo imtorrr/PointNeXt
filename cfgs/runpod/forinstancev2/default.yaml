@@ -1,11 +1,9 @@
-# LASDataset Configuration with HAG (Height Above Ground)
+# LASDataset Default Configuration
 # Universal dataset for LAS/LAZ point cloud files with automatic tiling
-# This configuration uses XYZ + HAG features (4 channels total)
-
 dataset:
   common:
     NAME: FORInstanceV2
-    data_root: data/FORInstanceV2 # Root folder containing train/val/test subfolders
+    data_root: /workspace/FORInstanceV2 # Root folder containing train/val/test subfolders
     tile_size: 6.0 # Tile size in meters
     tile_overlap: 0.5 # Overlap ratio (0-1)
     voxel_size: 0.02 # Voxel size for downsampling
@@ -17,7 +15,7 @@ dataset:
     label_offset: -1 # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
 
     # Feature configuration
-    use_approximate_hag: true # Include approximate HAG (grid_size=5)
+    use_approximate_hag: false # Do not include HAG - using only XYZ
     use_rgb: false # Include RGB colors
     use_intensity: false # Include intensity values
     use_return_number: false # Include return number info
@@ -39,13 +37,13 @@ dataset:
     shuffle: false
 
 # Feature keys (what to use as input)
-feature_keys: pos,x # Use XYZ + HAG (4 channels: 3 pos + 1 HAG)
+feature_keys: pos # Use only XYZ coordinates (3 channels)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
-batch_size: 16
-val_batch_size: 2
-test_batch_size: 2
+batch_size: 64
+val_batch_size: 8
+test_batch_size: 8
 
 dataloader:
   num_workers: 4
@@ -99,10 +97,10 @@ grad_norm_clip: 5
 use_voting: false
 
 # I/O
-root_dir: "log/"
-log_dir: "forinstancev2-hag"
+root_dir: "/workspace/log/"
+log_dir: "forinstancev2"
 save_freq: -1 # -1: only save last and best
 val_freq: 10
 
 wandb:
-  project: PointNeXt-FORInstanceV2-HAG
+  project: PointNeXt-FORInstanceV2

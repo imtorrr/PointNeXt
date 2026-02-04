@@ -23,12 +23,12 @@ dataset:
   train:
     split: train
     loop: 1 # Loop through dataset 1 times per epoch
-    presample: false # Presample and cache data
+    presample: true # Presample and cache data
     shuffle: true # Shuffle points
 
   val:
     split: val
-    presample: false
+    presample: true
     shuffle: false
 
   test:
@@ -41,12 +41,12 @@ feature_keys: pos # Use only XYZ coordinates (3 channels)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
-batch_size: 64
-val_batch_size: 8
-test_batch_size: 8
+batch_size: 16
+val_batch_size: 2
+test_batch_size: 2
 
 dataloader:
-  num_workers: 8
+  num_workers: 4
   collate_fn: collate_to_pyg_batch
 
 # Data augmentation
@@ -77,7 +77,7 @@ val_fn: validate
 ignore_index: null
 epochs: 300
 
-cls_weighed_loss: false
+cls_weighed_loss: true
 
 criterion_args:
   NAME: CrossEntropy
