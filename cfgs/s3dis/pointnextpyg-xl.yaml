@@ -6,7 +6,7 @@
 model:
   NAME: VariableSeg
   encoder_args:
-    NAME: PyGPointNextEncoder
+    NAME: PointNextEncoderPyG
     blocks: [1, 4, 7, 4, 4] 
     strides: [1, 4, 4, 4, 4]
     sa_layers: 1
@@ -29,7 +29,7 @@ model:
     norm_args:
       norm: 'bn'
   decoder_args:
-    NAME: PyGPointNextDecoder
+    NAME: PointNextDecoderPyG
   cls_args:
     NAME: VariableSegHead
     num_classes: 13

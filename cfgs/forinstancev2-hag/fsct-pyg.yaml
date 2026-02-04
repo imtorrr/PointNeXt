@@ -1,0 +1,31 @@
+# Reference: https://github.com/SKrisanski/FSCT.git
+model:
+  NAME: VariableSeg
+  encoder_args:
+    NAME: FSCTEncoderPyG
+    in_channels: 4 # pos (3) + HAG (1)
+    # FSCT architecture parameters
+    sa1_ratio: 0.1 # Sampling ratio for SA1
+    sa1_radius: 0.2 # Radius for SA1
+    sa1_mlp: [128, 256, 512] # MLP channels for SA1 (in_channels prepended automatically)
+    sa2_ratio: 0.05 # Sampling ratio for SA2
+    sa2_radius: 0.4 # Radius for SA2
+    sa2_mlp: [512, 1024, 1024] # MLP channels for SA2 (512+3 prepended automatically)
+    sa3_mlp: [1024, 2048, 2048] # MLP channels for SA3 global (1024+3 prepended automatically)
+  decoder_args:
+    NAME: FSCTDecoderPyG
+    # FSCT FP module configurations
+    fp3_mlp: [3072, 1024, 1024] # FP3: 2048 + 1024 = 3072
+    fp2_mlp: [1536, 1024, 1024] # FP2: 1024 + 512 = 1536
+    fp1_mlp: [1028, 1024, 1024] # FP1: 1024 + 4 = 1028 (includes input features)
+    fp3_k: 1 # k-NN for FP3 interpolation
+    fp2_k: 3 # k-NN for FP2 interpolation
+    fp1_k: 3 # k-NN for FP1 interpolation
+  cls_args:
+    NAME: VariableSegHead
+    num_classes: 3
+    in_channels: 1024 # Output from decoder
+    mlps: [1024] # Additional conv layer
+    dropout: 0.5 # FSCT uses 0.5 dropout
+    norm_args:
+      norm: "bn"
