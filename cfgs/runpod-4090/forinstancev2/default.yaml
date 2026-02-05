@@ -1,0 +1,106 @@
+# LASDataset Default Configuration
+# Universal dataset for LAS/LAZ point cloud files with automatic tiling
+dataset:
+  common:
+    NAME: FORInstanceV2
+    data_root: /workspace/FORInstanceV2 # Root folder containing train/val/test subfolders
+    tile_size: 6.0 # Tile size in meters
+    tile_overlap: 0.5 # Overlap ratio (0-1)
+    voxel_size: 0.02 # Voxel size for downsampling
+    voxel_max: 30000 # Max points per sample (null for no limit)
+    min_points_per_tile: 2000 # Min points to keep a tile during tiling
+    variable: true
+    # Label configuration
+    label_field: semantic_seg # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
+    label_offset: -1 # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
+
+    # Feature configuration
+    use_approximate_hag: false # Do not include HAG - using only XYZ
+    use_rgb: false # Include RGB colors
+    use_intensity: false # Include intensity values
+    use_return_number: false # Include return number info
+
+  train:
+    split: train
+    loop: 1 # Loop through dataset 1 times per epoch
+    presample: true # Presample and cache data
+    shuffle: true # Shuffle points
+
+  val:
+    split: val
+    presample: true
+    shuffle: false
+
+  test:
+    split: test
+    presample: false
+    shuffle: false
+
+# Feature keys (what to use as input)
+feature_keys: pos # Use only XYZ coordinates (3 channels)
+
+# Dataset info (update based on your data)
+num_classes: 3 # Number of classes (update for your dataset)
+batch_size: 96
+val_batch_size: 16
+test_batch_size: 16
+
+dataloader:
+  num_workers: 6
+  collate_fn: collate_to_pyg_batch
+
+# Data augmentation
+datatransforms:
+  train:
+    [
+      PointsToTensor,
+      FixedPoints,
+      RandomDropout,
+      PointCloudScaling,
+      PointCloudXYZAlign,
+      PointCloudRotation,
+      PointCloudJitter,
+    ]
+  val: [PointsToTensor, FixedPoints, PointCloudXYZAlign]
+  test: [PointsToTensor, PointCloudXYZAlign]
+  kwargs:
+    num_points: 20000
+    gravity_dim: 2
+    scale: [0.9, 1.1]
+    angle: [0.0833, 0.0833, 1.0] # Rotation angles [x, y, z] in radians
+    jitter_sigma: 0.005
+    jitter_clip: 0.01
+    dropout_ratio: 0.2
+
+# Training configuration
+val_fn: validate
+ignore_index: null
+epochs: 100
+
+cls_weighed_loss: true
+
+criterion_args:
+  NAME: CrossEntropy
+  label_smoothing: 0.2
+
+optimizer:
+  NAME: "adamw"
+  weight_decay: 1.0e-4
+
+# Learning rate scheduler
+sched: cosine
+warmup_epochs: 10
+min_lr: 1.0e-5
+lr: 0.001
+
+grad_norm_clip: 5
+use_voting: false
+
+# I/O
+root_dir: "/workspace/log/"
+log_dir: "forinstancev2"
+save_freq: -1 # -1: only save last and best
+val_freq: 5
+
+wandb:
+  project: PointNeXt-FORInstanceV2
