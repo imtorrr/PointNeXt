@@ -24,6 +24,10 @@ from torch_geometric.data import Data
 from openpoints.utils import ConfusionMatrix, get_mious
 from openpoints.dataset import build_dataloader_from_cfg, get_features_by_keys
 
+from concurrent.futures import ThreadPoolExecutor
+
+executor = ThreadPoolExecutor(max_workers=4)
+
 
 @torch.no_grad()
 def test_pyg_variable(model, test_loader, cfg, num_votes=1):
@@ -122,12 +126,18 @@ def test_pyg_variable(model, test_loader, cfg, num_votes=1):
 
             # output ground truth labels
             if gt is not None:
-                write_obj(coord, gt, os.path.join(cfg.vis_dir, f"gt-{file_name}.pcd"))
+                executor.submit(
+                    write_obj,
+                    coord,
+                    gt,
+                    os.path.join(cfg.vis_dir, f"{cfg.cfg_basename}-{file_name}-gt.pcd"),
+                )
             # output pred labels
-            write_obj(
+            executor.submit(
+                write_obj,
                 coord,
                 pred_vis,
-                os.path.join(cfg.vis_dir, f"{cfg.cfg_basename}-{file_name}.pcd"),
+                os.path.join(cfg.vis_dir, f"{cfg.cfg_basename}-{file_name}-pred.pcd"),
             )
 
     # Calculate final metrics
