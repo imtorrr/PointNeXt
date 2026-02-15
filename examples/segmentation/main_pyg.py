@@ -509,84 +509,87 @@ def main(gpu, cfg):
         )
 
     if cfg.world_size < 2:  # do not support multi gpu testing
-        # test
-        load_checkpoint(
-            model,
-            pretrained_path=os.path.join(cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"),
+        logging.warning(
+            "Testing using multiple GPUs is not allowed for now. Running testing after this training is required."
         )
-        cfg.csv_path = os.path.join(cfg.run_dir, cfg.run_name + ".csv")
-        if "sphere" in cfg.dataset.common.NAME.lower():
-            # TODO:
-            test_miou, test_macc, test_oa, test_ious, test_accs = validate_sphere(
-                model, val_loader, cfg, epoch=epoch
-            )
-        else:
-            # Use PyG-compatible test function for variable-sized data
-            if cfg.dataset.common.get("variable", False):
-                test_loader = build_dataloader_from_cfg(
-                    cfg.get("test_batch_size", cfg.batch_size),
-                    cfg.dataset,
-                    cfg.dataloader,
-                    datatransforms_cfg=cfg.datatransforms,
-                    split="test",
-                    distributed=cfg.distributed,
-                )
-                test_miou, test_macc, test_oa, test_ious, test_accs, _ = (
-                    test_pyg_variable(model, test_loader, cfg)
-                )
-            else:
-                data_list = generate_data_list(cfg)
-                test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(
-                    model, data_list, cfg
-                )
-        with np.printoptions(precision=2, suppress=True):
-            logging.info(
-                f"Best ckpt @E{best_epoch},  test_oa {test_oa:.2f}, test_macc {test_macc:.2f}, test_miou {test_miou:.2f}, "
-                f"\niou per cls is: {test_ious}"
-            )
-        if writer is not None:
-            writer.add_scalar("test_miou", test_miou, epoch)
-            writer.add_scalar("test_macc", test_macc, epoch)
-            writer.add_scalar("test_oa", test_oa, epoch)
-        write_to_csv(
-            test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True
-        )
-        logging.info(f"save results in {cfg.csv_path}")
-        if cfg.use_voting:
-            load_checkpoint(
-                model,
-                pretrained_path=os.path.join(
-                    cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"
-                ),
-            )
-            set_random_seed(cfg.seed)
-            val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = validate_fn(
-                model,
-                val_loader,
-                cfg,
-                num_votes=20,
-                data_transform=data_transform,
-                epoch=epoch,
-            )
-            if writer is not None:
-                writer.add_scalar("val_miou20", val_miou, cfg.epochs + 50)
-                writer.add_scalar("val_loss20", val_loss, cfg.epochs + 50)
-
-            ious_table = [f"{item:.2f}" for item in val_ious]
-            data = (
-                [
-                    cfg.cfg_basename,
-                    "True",
-                    f"{val_oa:.2f}",
-                    f"{val_macc:.2f}",
-                    f"{val_miou:.2f}",
-                ]
-                + ious_table
-                + [str(best_epoch), cfg.run_dir]
-            )
-            with open(cfg.csv_path, "w", encoding="UT8") as f:
-                writer = csv.writer(f)
-                writer.writerow(data)
+        # # test
+        # load_checkpoint(
+        #     model,
+        #     pretrained_path=os.path.join(cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"),
+        # )
+        # cfg.csv_path = os.path.join(cfg.run_dir, cfg.run_name + ".csv")
+        # if "sphere" in cfg.dataset.common.NAME.lower():
+        #     # TODO:
+        #     test_miou, test_macc, test_oa, test_ious, test_accs = validate_sphere(
+        #         model, val_loader, cfg, epoch=epoch
+        #     )
+        # else:
+        #     # Use PyG-compatible test function for variable-sized data
+        #     if cfg.dataset.common.get("variable", False):
+        #         test_loader = build_dataloader_from_cfg(
+        #             cfg.get("test_batch_size", cfg.batch_size),
+        #             cfg.dataset,
+        #             cfg.dataloader,
+        #             datatransforms_cfg=cfg.datatransforms,
+        #             split="test",
+        #             distributed=cfg.distributed,
+        #         )
+        #         test_miou, test_macc, test_oa, test_ious, test_accs, _ = (
+        #             test_pyg_variable(model, test_loader, cfg)
+        #         )
+        #     else:
+        #         data_list = generate_data_list(cfg)
+        #         test_miou, test_macc, test_oa, test_ious, test_accs, _ = test(
+        #             model, data_list, cfg
+        #         )
+        # with np.printoptions(precision=2, suppress=True):
+        #     logging.info(
+        #         f"Best ckpt @E{best_epoch},  test_oa {test_oa:.2f}, test_macc {test_macc:.2f}, test_miou {test_miou:.2f}, "
+        #         f"\niou per cls is: {test_ious}"
+        #     )
+        # if writer is not None:
+        #     writer.add_scalar("test_miou", test_miou, epoch)
+        #     writer.add_scalar("test_macc", test_macc, epoch)
+        #     writer.add_scalar("test_oa", test_oa, epoch)
+        # write_to_csv(
+        #     test_oa, test_macc, test_miou, test_ious, best_epoch, cfg, write_header=True
+        # )
+        # logging.info(f"save results in {cfg.csv_path}")
+        # if cfg.use_voting:
+        #     load_checkpoint(
+        #         model,
+        #         pretrained_path=os.path.join(
+        #             cfg.ckpt_dir, f"{cfg.run_name}_ckpt_best.pth"
+        #         ),
+        #     )
+        #     set_random_seed(cfg.seed)
+        #     val_miou, val_macc, val_oa, val_ious, val_accs, val_loss = validate_fn(
+        #         model,
+        #         val_loader,
+        #         cfg,
+        #         num_votes=20,
+        #         data_transform=data_transform,
+        #         epoch=epoch,
+        #     )
+        #     if writer is not None:
+        #         writer.add_scalar("val_miou20", val_miou, cfg.epochs + 50)
+        #         writer.add_scalar("val_loss20", val_loss, cfg.epochs + 50)
+        #
+        #     ious_table = [f"{item:.2f}" for item in val_ious]
+        #     data = (
+        #         [
+        #             cfg.cfg_basename,
+        #             "True",
+        #             f"{val_oa:.2f}",
+        #             f"{val_macc:.2f}",
+        #             f"{val_miou:.2f}",
+        #         ]
+        #         + ious_table
+        #         + [str(best_epoch), cfg.run_dir]
+        #     )
+        #     with open(cfg.csv_path, "w", encoding="UT8") as f:
+        #         writer = csv.writer(f)
+        #         writer.writerow(data)
     else:
         logging.warning(
             "Testing using multiple GPUs is not allowed for now. Running testing after this training is required."

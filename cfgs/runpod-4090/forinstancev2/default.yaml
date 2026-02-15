@@ -41,12 +41,12 @@ feature_keys: pos # Use only XYZ coordinates (3 channels)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
-batch_size: 96
+batch_size: 64
 val_batch_size: 16
 test_batch_size: 16
 
 dataloader:
-  num_workers: 6
+  num_workers: 10
   collate_fn: collate_to_pyg_batch
 
 # Data augmentation
@@ -55,9 +55,8 @@ datatransforms:
     [
       PointsToTensor,
       FixedPoints,
-      RandomDropout,
-      PointCloudScaling,
       PointCloudXYZAlign,
+      PointCloudScaling,
       PointCloudRotation,
       PointCloudJitter,
     ]
@@ -75,13 +74,13 @@ datatransforms:
 # Training configuration
 val_fn: validate
 ignore_index: null
-epochs: 100
+epochs: 150
 
 cls_weighed_loss: true
 
 criterion_args:
   NAME: CrossEntropy
-  label_smoothing: 0.2
+  label_smoothing: 0.1
 
 optimizer:
   NAME: "adamw"
@@ -91,7 +90,7 @@ optimizer:
 sched: cosine
 warmup_epochs: 10
 min_lr: 1.0e-5
-lr: 0.001
+lr: 0.01
 
 grad_norm_clip: 5
 use_voting: false

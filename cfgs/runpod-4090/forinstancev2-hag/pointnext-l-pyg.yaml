@@ -26,7 +26,7 @@ model:
     conv_args:
       order: conv-norm-act
     act_args:
-      act: "leaky_relu"
+      act: "relu"
     norm_args:
       norm: "bn"
   decoder_args:
