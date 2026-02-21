@@ -31,7 +31,7 @@ export TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;9.0"
 export MAX_JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 5)
 
 # Enable ccache if available for faster rebuilds
-if command -v ccache &> /dev/null; then
+if command -v ccache &>/dev/null; then
   export CC="ccache gcc"
   export CXX="ccache g++"
   export CUDA_NVCC_EXECUTABLE="ccache nvcc"
@@ -69,7 +69,7 @@ fi
 echo ""
 # Install and configure Ninja build system for faster C++ builds
 log_info "Setting up Ninja build system for faster C++ compilation..."
-if ! command -v ninja &> /dev/null; then
+if ! command -v ninja &>/dev/null; then
   uv pip install ninja
   log_success "Ninja build system installed"
 else
@@ -85,7 +85,7 @@ echo ""
 
 # Status file for tracking progress
 STATUS_FILE="/tmp/build_status_$$.txt"
-> "$STATUS_FILE"
+>"$STATUS_FILE"
 
 # List of extensions to build
 declare -A extensions=(
@@ -115,13 +115,13 @@ build_extension() {
   local status_file=$4
 
   # Mark as in progress
-  echo "BUILDING:$name" >> "$status_file"
+  echo "BUILDING:$name" >>"$status_file"
 
-  cd "$path" 2>&1 > "$log_file"
-  if python setup.py install >> "$log_file" 2>&1; then
-    echo "SUCCESS:$name" >> "$status_file"
+  cd "$path" 2>&1 >"$log_file"
+  if python setup.py install >>"$log_file" 2>&1; then
+    echo "SUCCESS:$name" >>"$status_file"
   else
-    echo "FAILED:$name:$required:$log_file" >> "$status_file"
+    echo "FAILED:$name:$required:$log_file" >>"$status_file"
   fi
 }
 
@@ -152,7 +152,7 @@ EXT_TOTAL=${#extensions[@]}
     if [ "$completed" -ne "$prev_count" ] || [ "$building" -gt 0 ]; then
       # Move cursor up to redraw status
       if [ "$prev_count" -gt 0 ]; then
-        tput cuu $(( EXT_TOTAL + 1 ))
+        tput cuu $((EXT_TOTAL + 1))
       fi
 
       # Display current status
@@ -213,7 +213,7 @@ echo ""
 has_errors=false
 while IFS= read -r line; do
   if [[ $line == FAILED:* ]]; then
-    IFS=':' read -r _ name required log_file <<< "$line"
+    IFS=':' read -r _ name required log_file <<<"$line"
     if [[ $required == "required" ]]; then
       log_error "Failed to install $name. Check $log_file for details."
       has_errors=true
@@ -221,7 +221,7 @@ while IFS= read -r line; do
       log_warning "Failed to install $name. This is optional. Check $log_file for details."
     fi
   fi
-done < "$STATUS_FILE"
+done <"$STATUS_FILE"
 
 # Cleanup
 rm -f "$STATUS_FILE"
@@ -232,7 +232,6 @@ if [ "$has_errors" = true ]; then
 fi
 
 log_success "All C++ extensions built successfully!"
-
 echo ""
 log_info "Environment setup complete!"
 echo "------------------------------------------------------------"

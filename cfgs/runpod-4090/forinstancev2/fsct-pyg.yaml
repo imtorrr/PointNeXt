@@ -1,4 +1,8 @@
 # Reference: https://github.com/SKrisanski/FSCT.git
+
+batch_size: 8
+use_amp: true
+
 model:
   NAME: VariableSeg
   encoder_args:
