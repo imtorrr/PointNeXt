@@ -43,12 +43,12 @@ feature_keys: pos,x # Use XYZ + HAG (4 channels: 3 pos + 1 HAG)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
-batch_size: 64
+batch_size: 96
 val_batch_size: 16
 test_batch_size: 16
 
 dataloader:
-  num_workers: 10
+  num_workers: 14
   collate_fn: collate_to_pyg_batch
 
 # Data augmentation
@@ -92,7 +92,7 @@ optimizer:
 sched: cosine
 warmup_epochs: 10
 min_lr: 1.0e-5
-lr: 0.01
+lr: 0.001
 
 grad_norm_clip: 5
 use_voting: false
