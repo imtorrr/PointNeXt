@@ -2,6 +2,7 @@
 # Universal dataset for LAS/LAZ point cloud files with automatic tiling
 # This configuration uses XYZ + HAG features (4 channels total)
 
+use_amp: true
 dataset:
   common:
     NAME: FORInstanceV2
@@ -48,7 +49,8 @@ val_batch_size: 16
 test_batch_size: 16
 
 dataloader:
-  num_workers: 12
+  num_workers: 16
+  prefetch_factor: 4
   collate_fn: collate_to_pyg_batch
 
 # Data augmentation
