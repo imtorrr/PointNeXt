@@ -5,10 +5,10 @@ for profiling the parameters, flops, speed of a model
 usage example:
 
 1. profile pointnext-s on scanobjectnn using 128 * 1024 points as input
-CUDA_VISIBLE_DEVICES=0 python examples/profile.py --cfg cfgs/scanobjectnn/pointnext-s.yaml batch_size=128 num_points=1024 timing=True
+CUDA_VISIBLE_DEVICES=0 python examples/profile_model.py --cfg cfgs/scanobjectnn/pointnext-s.yaml batch_size=128 num_points=1024 timing=True
 
-2. profile all models for scanobjectnn classification using 128 * 1024 points as input
-CUDA_VISIBLE_DEVICES=0 python examples/profile.py --cfg cfgs/scanobjectnn batch_size=128 num_points=1024 timing=True
+2. profile a PyG model (variable-size inputs via torch_geometric.data.Data)
+CUDA_VISIBLE_DEVICES=0 python examples/profile_model.py --cfg cfgs/runpod-4090/forinstancev2/pointnext-s-pyg.yaml batch_size=4 num_points=15000 timing=True
 """
 
 import os
@@ -23,12 +23,27 @@ from openpoints.utils import EasyConfig, cal_model_parm_nums
 from openpoints.models import build_model_from_cfg
 
 
+def _make_pyg_data(B, N, C, device):
+    """Build a synthetic torch_geometric.data.Data batch for PyG models."""
+    from torch_geometric.data import Data, Batch
+    data_list = []
+    for _ in range(B):
+        pos = torch.randn(N, 3)
+        x = torch.randn(N, C)
+        data_list.append(Data(pos=pos, x=x))
+    batch = Batch.from_data_list(data_list)
+    return batch.to(device)
+
+
 def profile_model(model, cfg):
     model.eval()
     # for classification, num_points is 128 * 1024
     # for s3dis, num_points 16 * 15000
-    B, N, C = 1, cfg.num_points, 3
-    if cfg.variable:
+    B, N, C = 1, cfg.num_points, cfg.model.encoder_args.get("in_channels", 3)
+    if cfg.pyg:
+        data = _make_pyg_data(B, N, C, "cuda")
+        args = [data]
+    elif cfg.variable:
         points = torch.randn(B * N, 3).cuda().contiguous()
         features = torch.randn(B * N, C).cuda().contiguous()
         offset = []
@@ -47,11 +62,12 @@ def profile_model(model, cfg):
             cls = torch.zeros(B, 16).long().cuda()
         if cfg.dataset.common.NAME == "ShapeNetPartNormal":
             args = [points, features, cls]
-            # args = {'pos': points, 'x': features, 'cls': cls}
         else:
             args = [{"pos": points, "x": features}]
-            # args = points
-    print(f"test input size: ({points.shape, features.shape})")
+    if cfg.pyg:
+        print(f"test input size: (pos={data.pos.shape}, x={data.x.shape}, batch_size={B})")
+    else:
+        print(f"test input size: ({points.shape, features.shape})")
 
     if cfg.get("flops", False):
         from deepspeed.profiling.flops_profiler import get_model_profile
@@ -76,7 +92,9 @@ def profile_model(model, cfg):
 
     if cfg.get("timing", False):
         B = cfg.batch_size
-        if cfg.variable:
+        if cfg.pyg:
+            args = [_make_pyg_data(B, N, C, "cuda")]
+        elif cfg.variable:
             points = torch.randn(B * N, 3).cuda().contiguous()
             features = torch.randn(B * N, C).cuda().contiguous()
             offset = []
@@ -93,7 +111,6 @@ def profile_model(model, cfg):
             if cfg.dataset.common.NAME == "ShapeNetPartNormal":
                 args = [points, features, cls]
             else:
-                # points = torch.cat((points, features.transpose(1, 2)), dim=2)
                 args = [features.transpose(1, 2).contiguous()]
         model = build_model_from_cfg(cfg.model).cuda()
         n_runs = cfg.get("nruns", 200)
@@ -169,9 +186,10 @@ if __name__ == "__main__":
             cfg.update(opts)
 
             cfg.variable = "variable" in file
+            cfg.pyg = "pyg" in file
             if cfg.model.get("encoder_args", None) is not None:
-                cfg.model.encoder_args.in_channels = 3
-            cfg.model.in_channels = 3
+                cfg.model.encoder_args.in_channels = cfg.model.encoder_args.get("in_channels", 3)
+            cfg.model.in_channels = cfg.model.get("in_channels", 3)
             model = build_model_from_cfg(cfg.model).cuda()
             model.eval()
             model_size = cal_model_parm_nums(model)
