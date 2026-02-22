@@ -3,7 +3,7 @@
 #  15.24   7.53    7.125
 # Throughput (ins./s): 115.24562648667185
 
-batch_size: 8
+batch_size: 64
 
 model:
   NAME: VariableSeg
@@ -38,4 +38,3 @@ model:
     in_channels: null
     norm_args:
       norm: "bn"
-

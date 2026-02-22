@@ -2,6 +2,9 @@
 # Model Information
 # Based on standard PointNet++ architecture with PyTorch Geometric implementation
 # Uses only XYZ coordinates (3 channels)
+batch_size: 32
+warmup_epochs: 0
+min_lr: 0.0001
 
 model:
   NAME: VariableSeg
@@ -12,10 +15,12 @@ model:
     strides: [4, 4, 4, 4]
     layers: 2
     use_res: False
-    mlps: [[[32, 32, 64]],      # stage 1
-           [[64, 64, 128]],     # stage 2
-           [[128, 128, 256]],   # stage 3
-           [[256, 256, 512]]]   # stage 4
+    mlps: [
+        [[32, 32, 64]], # stage 1
+        [[64, 64, 128]], # stage 2
+        [[128, 128, 256]], # stage 3
+        [[256, 256, 512]],
+      ] # stage 4
     radius: 0.1
     num_samples: 32
     sampler: fps
