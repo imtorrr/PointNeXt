@@ -232,6 +232,23 @@ if [ "$has_errors" = true ]; then
 fi
 
 log_success "All C++ extensions built successfully!"
+
+echo ""
+log_info "Installing AWS CLI..."
+if command -v aws &>/dev/null; then
+  log_info "AWS CLI already installed: $(aws --version 2>&1)"
+else
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+  unzip -q /tmp/awscliv2.zip -d /tmp/
+  sudo /tmp/aws/install
+  rm -rf /tmp/awscliv2.zip /tmp/aws
+  if command -v aws &>/dev/null; then
+    log_success "AWS CLI installed: $(aws --version 2>&1)"
+  else
+    log_error "AWS CLI installation failed."
+  fi
+fi
+
 echo ""
 log_info "Environment setup complete!"
 echo "------------------------------------------------------------"
