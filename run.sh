@@ -289,7 +289,7 @@ cleanup_runpod() {
 
   if command -v runpodctl &>/dev/null; then
     echo -e "${YELLOW}Removing RunPod instance...${NC}"
-    runpodctl remove pod "$pod_id"
+    runpodctl stop pod "$pod_id"
 
     if [[ $? -eq 0 ]]; then
       echo -e "${GREEN}RunPod instance removed successfully!${NC}"
