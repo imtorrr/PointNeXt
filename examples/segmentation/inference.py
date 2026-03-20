@@ -35,6 +35,7 @@ Optional flags:
 
 import sys
 import os
+from pathlib import Path
 
 sys.path.append(os.path.abspath("."))
 
@@ -46,7 +47,9 @@ import time
 
 import laspy
 import numpy as np
+import pandas as pd
 import torch
+from joblib import Parallel, delayed
 from sklearn.neighbors import NearestNeighbors
 from torch.utils.data import Dataset, DataLoader
 from torch_geometric.data import Data, Batch
@@ -132,17 +135,53 @@ def collate_pyg(data_list):
 # ─── Label propagation ────────────────────────────────────────────────────────
 
 
+def _process_propagation_chunk(
+    chunk_idx: int,
+    original_cloud: np.ndarray,
+    probs_all: np.ndarray,
+    nn: NearestNeighbors,
+    chunk_size: int,
+    k: int,
+    direct_threshold: float,
+) -> tuple:
+    """Process a single chunk for label propagation.
+
+    Args:
+        chunk_idx:        Index of the chunk.
+        original_cloud:   (M, 3+) full-resolution global xyz.
+        probs_all:        (N, num_classes) soft class probabilities from model.
+        nn:               Fitted NearestNeighbors object.
+        chunk_size:       Number of points per chunk.
+        k:                Number of neighbours for the vote.
+        direct_threshold: Distance threshold for direct inference.
+
+    Returns:
+        Tuple of (start_idx, labels_chunk, model_inferred_chunk)
+    """
+    M = len(original_cloud)
+    start = chunk_idx * chunk_size
+    end = min(start + chunk_size, M)
+
+    distances, indices = nn.kneighbors(original_cloud[start:end, :3])  # (C, k)
+    avg_probs = np.mean(probs_all[indices], axis=1)  # (C, num_classes)
+    labels_chunk = np.argmax(avg_probs, axis=1)
+    model_inferred_chunk = (distances[:, 0] < direct_threshold).astype(np.uint8)
+
+    return start, end, labels_chunk, model_inferred_chunk
+
+
 def propagate_labels(
     pred_cloud: np.ndarray,
     original_cloud: np.ndarray,
     k: int = 16,
     direct_threshold: float = 0.05,
     chunk_size: int = 1_000_000,
+    n_jobs: int = -1,
 ) -> tuple:
     """Assign class labels from a (possibly downsampled) segmented cloud to
     every point in the original full-resolution cloud via k-NN voting.
 
-    Queries are processed in ``chunk_size`` chunks to avoid allocating
+    Queries are processed in ``chunk_size`` chunks in parallel to avoid allocating
     (M × k) distance/index arrays for very large clouds (e.g. 200 M pts).
 
     Args:
@@ -152,6 +191,7 @@ def propagate_labels(
         direct_threshold:  Distance (metres) within which a point is considered
                            directly inferred by the model rather than propagated.
         chunk_size:        Number of original-cloud points to query per batch.
+        n_jobs:            Number of parallel workers (-1 = all cores, default -1).
 
     Returns:
         labels:          argmax label per point, shape (M,), dtype float64.
@@ -169,18 +209,29 @@ def propagate_labels(
     model_inferred = np.empty(M, dtype=np.uint8)
 
     n_chunks = (M + chunk_size - 1) // chunk_size
-    for i in tqdm(range(n_chunks), desc="Propagating", unit="chunk"):
-        start = i * chunk_size
-        end = min(start + chunk_size, M)
-        distances, indices = nn.kneighbors(original_cloud[start:end, :3])  # (C, k)
-        avg_probs = np.mean(probs_all[indices], axis=1)  # (C, num_classes)
-        labels[start:end] = np.argmax(avg_probs, axis=1)
-        model_inferred[start:end] = (distances[:, 0] < direct_threshold).astype(np.uint8)
+
+    # Process chunks in parallel
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(_process_propagation_chunk)(
+            i,
+            original_cloud,
+            probs_all,
+            nn,
+            chunk_size,
+            k,
+            direct_threshold,
+        )
+        for i in tqdm(range(n_chunks), desc="Propagating", unit="chunk")
+    )
+
+    # Aggregate results
+    for start, end, labels_chunk, model_inferred_chunk in results:
+        labels[start:end] = labels_chunk
+        model_inferred[start:end] = model_inferred_chunk
 
     n_direct = model_inferred.sum()
     print(
-        f"  {n_direct:,} / {M:,} points directly inferred "
-        f"({100 * n_direct / M:.1f}%)"
+        f"  {n_direct:,} / {M:,} points directly inferred ({100 * n_direct / M:.1f}%)"
     )
 
     return labels, model_inferred
@@ -338,10 +389,7 @@ class SemanticSegmentation:
         tile_overlap = self.params.get(
             "tile_overlap", self.cfg.dataset.common.get("tile_overlap", 0.5)
         )
-        min_pts = self.params.get(
-            "min_points_per_tile",
-            self.cfg.dataset.common.get("min_points_per_tile", 2000),
-        )
+        min_pts = 0
         voxel_max = self.params.get("voxel_max", None)
 
         print(
@@ -462,12 +510,14 @@ class SemanticSegmentation:
         knn_k = self.params.get("knn_k", 16)
         direct_threshold = self.params.get("direct_threshold", 0.05)
         prop_chunk_size = self.params.get("prop_chunk_size", 1_000_000)
+        prop_n_jobs = self.params.get("prop_n_jobs", -1)
         self.output_labels, self.model_inferred = propagate_labels(
             self.pred_cloud,
             self.original_cloud,
             k=knn_k,
             direct_threshold=direct_threshold,
             chunk_size=prop_chunk_size,
+            n_jobs=prop_n_jobs,
         )
 
         # 7. Save
@@ -482,6 +532,116 @@ class SemanticSegmentation:
         print("Semantic segmentation done")
 
 
+# ─── Batch processing ─────────────────────────────────────────────────────────
+
+
+def run_batch_inference(input_path: str, args):
+    """Process all .las/.laz files in a directory or a single file.
+
+    Args:
+        input_path: Path to a single file or directory
+        args: Parsed command line arguments
+    """
+    input_path_obj = Path(input_path)
+
+    if input_path_obj.is_file():
+        # Single file mode
+        files_to_process = [input_path_obj]
+    elif input_path_obj.is_dir():
+        # Directory mode - find all .las and .laz files
+        files_to_process = sorted(
+            list(input_path_obj.glob("*.las")) + list(input_path_obj.glob("*.laz"))
+        )
+        if not files_to_process:
+            print(f"No .las or .laz files found in {input_path}")
+            return
+    else:
+        print(f"Error: {input_path} is neither a file nor a directory")
+        return
+
+    print(f"Processing {len(files_to_process)} file(s)…\n")
+
+    start_time_batch = time.time()
+    successful = 0
+    failed = 0
+
+    # Track metadata for CSV report
+    results = []
+
+    for i, file_path in enumerate(files_to_process, 1):
+        print(f"[{i}/{len(files_to_process)}] {file_path.name}")
+
+        file_start_time = time.time()
+        status = "FAILED"
+        output_path = None
+        error_msg = None
+
+        try:
+            params = {
+                "point_cloud_filename": str(file_path),
+                "checkpoint_path": args.checkpoint,
+                "cfg_path": args.cfg,
+                "batch_size": args.batch_size,
+                "use_cpu": args.cpu,
+                "delete_working_dir": not args.keep_tiles,
+                "label_offset": args.label_offset,
+                "knn_k": args.knn_k,
+                "direct_threshold": args.direct_threshold,
+                "voxel_max": args.voxel_max,
+                "prop_chunk_size": args.prop_chunk_size,
+                "prop_n_jobs": args.prop_n_jobs,
+            }
+
+            # Only override tile parameters if explicitly provided
+            if args.tile_size is not None:
+                params["tile_size"] = args.tile_size
+            if args.tile_overlap is not None:
+                params["tile_overlap"] = args.tile_overlap
+
+            seg = SemanticSegmentation(params)
+            seg.inference()
+            status = "SUCCESS"
+            output_path = seg.output_las
+            successful += 1
+        except Exception as e:
+            print(f"  ERROR: {e}")
+            error_msg = str(e)
+            failed += 1
+
+        file_elapsed = time.time() - file_start_time
+        results.append(
+            {
+                "filename": file_path.name,
+                "input_path": str(file_path),
+                "output_path": output_path if output_path else "N/A",
+                "status": status,
+                "time_seconds": file_elapsed,
+                "error": error_msg if error_msg else "",
+            }
+        )
+
+        print()  # blank line between files
+
+    elapsed_batch = time.time() - start_time_batch
+
+    # Save results to CSV
+    df = pd.DataFrame(results)
+    csv_output = (
+        Path(input_path_obj if input_path_obj.is_dir() else input_path_obj.parent)
+        / "inference_results.csv"
+    )
+    df.to_csv(csv_output, index=False)
+    print(f"Results saved to: {csv_output}")
+
+    print(f"\n{'=' * 70}")
+    print(f"Batch processing complete: {successful}/{len(files_to_process)} successful")
+    if failed > 0:
+        print(f"Failed: {failed}")
+    print(f"Total time: {elapsed_batch:.1f} s")
+    print(f"Average time per file: {elapsed_batch / len(files_to_process):.1f} s")
+    print(f"{'=' * 70}")
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -493,7 +653,9 @@ if __name__ == "__main__":
         required=True,
         help="YAML config (e.g. cfgs/runpod-4090/forinstancev2/pointnext-s-pyg.yaml)",
     )
-    parser.add_argument("--input", required=True, help="Input LAS/LAZ file")
+    parser.add_argument(
+        "--input", required=True, help="Input LAS/LAZ file or directory of files"
+    )
     parser.add_argument("--checkpoint", required=True, help="Model checkpoint (.pth)")
     parser.add_argument(
         "--output",
@@ -556,29 +718,44 @@ if __name__ == "__main__":
         help="Points per chunk during label propagation kNN query (default: 1000000). "
         "Reduce to lower peak RAM usage.",
     )
+    parser.add_argument(
+        "--prop_n_jobs",
+        type=int,
+        default=-1,
+        help="Number of parallel workers for label propagation (-1 = all cores, default: -1). "
+        "Set to 1 to disable parallelization.",
+    )
     args = parser.parse_args()
 
-    params = {
-        "point_cloud_filename": args.input,
-        "checkpoint_path": args.checkpoint,
-        "cfg_path": args.cfg,
-        "batch_size": args.batch_size,
-        "use_cpu": args.cpu,
-        "delete_working_dir": not args.keep_tiles,
-        "label_offset": args.label_offset,
-        "knn_k": args.knn_k,
-        "direct_threshold": args.direct_threshold,
-        "voxel_max": args.voxel_max,
-        "prop_chunk_size": args.prop_chunk_size,
-    }
-    if args.tile_size is not None:
-        params["tile_size"] = args.tile_size
-    if args.tile_overlap is not None:
-        params["tile_overlap"] = args.tile_overlap
+    # Check if input is a directory (batch mode) or file (single mode)
+    input_path = Path(args.input)
+    if input_path.is_dir():
+        # Batch mode: process all .las/.laz files in the directory
+        run_batch_inference(args.input, args)
+    else:
+        # Single file mode: maintain backward compatibility
+        params = {
+            "point_cloud_filename": args.input,
+            "checkpoint_path": args.checkpoint,
+            "cfg_path": args.cfg,
+            "batch_size": args.batch_size,
+            "use_cpu": args.cpu,
+            "delete_working_dir": not args.keep_tiles,
+            "label_offset": args.label_offset,
+            "knn_k": args.knn_k,
+            "direct_threshold": args.direct_threshold,
+            "voxel_max": args.voxel_max,
+            "prop_chunk_size": args.prop_chunk_size,
+            "prop_n_jobs": args.prop_n_jobs,
+        }
+        if args.tile_size is not None:
+            params["tile_size"] = args.tile_size
+        if args.tile_overlap is not None:
+            params["tile_overlap"] = args.tile_overlap
 
-    seg = SemanticSegmentation(params)
+        seg = SemanticSegmentation(params)
 
-    if args.output is not None:
-        seg.output_las = args.output
+        if args.output is not None:
+            seg.output_las = args.output
 
-    seg.inference()
+        seg.inference()

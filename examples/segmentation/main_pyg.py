@@ -363,7 +363,7 @@ def main(gpu, cfg):
         logging.info("Training from scratch")
 
     if "freeze_blocks" in cfg.mode:
-        for p in model_module.encoder.blocks.parameters():
+        for p in model_module.encoder.parameters():
             p.requires_grad = False
 
     train_loader = build_dataloader_from_cfg(
