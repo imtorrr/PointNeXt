@@ -5,16 +5,16 @@ use_amp: true
 
 dataset:
   common:
-    NAME: FORInstanceV2
-    data_root: data/FORInstanceV2 # Root folder containing train/val/test subfolders
+    NAME: LASDataset
+    data_root: data/FieldData # Root folder containing train/val/test subfolders
     tile_size: 6.0 # Tile size in meters
     tile_overlap: 0.5 # Overlap ratio (0-1)
     voxel_size: 0.02 # Voxel size for downsampling
     voxel_max: 30000 # Max points per sample (null for no limit)
-    min_points_per_tile: 0 # Min points to keep a tile during tiling
+    min_points_per_tile: 2000 # Min points to keep a tile during tiling
     variable: true
     # Label configuration
-    label_field: semantic_seg # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
+    label_field: classification # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
     label_offset: -1 # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
 
     # Feature configuration
@@ -31,7 +31,7 @@ dataset:
 
   val:
     split: val
-    presample: false
+    presample: true
     shuffle: false
 
   test:
@@ -78,9 +78,9 @@ datatransforms:
 # Training configuration
 val_fn: validate
 ignore_index: null
-epochs: 300
+epochs: 50
 
-cls_weighed_loss: true
+cls_weighed_loss: false
 
 criterion_args:
   NAME: CrossEntropy
@@ -101,9 +101,9 @@ use_voting: false
 
 # I/O
 root_dir: "log/"
-log_dir: "forinstancev2"
+log_dir: "field_data"
 save_freq: -1 # -1: only save last and best
 val_freq: 10
 
 wandb:
-  project: PointNeXt-FORInstanceV2
+  project: PointNeXt-FieldData

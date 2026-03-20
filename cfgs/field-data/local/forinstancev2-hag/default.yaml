@@ -1,24 +1,25 @@
-# LASDataset Default Configuration
+# LASDataset Configuration with HAG (Height Above Ground)
 # Universal dataset for LAS/LAZ point cloud files with automatic tiling
+# This configuration uses XYZ + HAG features (4 channels total)
 
 use_amp: true
 
 dataset:
   common:
-    NAME: FORInstanceV2
-    data_root: data/FORInstanceV2 # Root folder containing train/val/test subfolders
+    NAME: FieldData
+    data_root: data/FieldData # Root folder containing train/val/test subfolders
     tile_size: 6.0 # Tile size in meters
     tile_overlap: 0.5 # Overlap ratio (0-1)
     voxel_size: 0.02 # Voxel size for downsampling
     voxel_max: 30000 # Max points per sample (null for no limit)
-    min_points_per_tile: 0 # Min points to keep a tile during tiling
+    min_points_per_tile: 2000 # Min points to keep a tile during tiling
     variable: true
     # Label configuration
-    label_field: semantic_seg # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
+    label_field: classification # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
     label_offset: -1 # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
 
     # Feature configuration
-    use_approximate_hag: false # Do not include HAG - using only XYZ
+    use_approximate_hag: true # Include approximate HAG (grid_size=5)
     use_rgb: false # Include RGB colors
     use_intensity: false # Include intensity values
     use_return_number: false # Include return number info
@@ -26,21 +27,21 @@ dataset:
   train:
     split: train
     loop: 1 # Loop through dataset 1 times per epoch
-    presample: true # Presample and cache data
+    presample: false # Presample and cache data
     shuffle: true # Shuffle points
 
   val:
     split: val
-    presample: false
+    presample: true
     shuffle: false
 
   test:
-    split: test
+    split: val
     presample: false
     shuffle: false
 
 # Feature keys (what to use as input)
-feature_keys: pos # Use only XYZ coordinates (3 channels)
+feature_keys: pos,x # Use XYZ + HAG (4 channels: 3 pos + 1 HAG)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
@@ -101,9 +102,9 @@ use_voting: false
 
 # I/O
 root_dir: "log/"
-log_dir: "forinstancev2"
+log_dir: "field_data-hag"
 save_freq: -1 # -1: only save last and best
 val_freq: 10
 
 wandb:
-  project: PointNeXt-FORInstanceV2
+  project: PointNeXt-FieldData-HAG

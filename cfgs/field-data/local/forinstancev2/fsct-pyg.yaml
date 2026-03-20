@@ -1,14 +1,9 @@
 # Reference: https://github.com/SKrisanski/FSCT.git
-
-batch_size: 4
-warmup_epochs: 0
-lr: 0.0001
-
 model:
   NAME: VariableSeg
   encoder_args:
     NAME: FSCTEncoderPyG
-    in_channels: 4 # pos (3) + HAG (1)
+    in_channels: 3 # pos (3) only - XYZ coordinates
     # FSCT architecture parameters
     sa1_ratio: 0.1 # Sampling ratio for SA1
     sa1_radius: 0.2 # Radius for SA1
@@ -22,7 +17,7 @@ model:
     # FSCT FP module configurations
     fp3_mlp: [3072, 1024, 1024] # FP3: 2048 + 1024 = 3072
     fp2_mlp: [1536, 1024, 1024] # FP2: 1024 + 512 = 1536
-    fp1_mlp: [1028, 1024, 1024] # FP1: 1024 + 4 = 1028 (includes input features)
+    fp1_mlp: [1027, 1024, 1024] # FP1: 1024 + 3 = 1027 (includes input features)
     fp3_k: 1 # k-NN for FP3 interpolation
     fp2_k: 3 # k-NN for FP2 interpolation
     fp1_k: 3 # k-NN for FP1 interpolation

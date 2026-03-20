@@ -5,13 +5,13 @@ use_amp: true
 
 dataset:
   common:
-    NAME: FORInstanceV2
-    data_root: data/FORInstanceV2 # Root folder containing train/val/test subfolders
+    NAME: FieldData
+    data_root: /workspace/FieldData # Root folder containing train/val/test subfolders
     tile_size: 6.0 # Tile size in meters
     tile_overlap: 0.5 # Overlap ratio (0-1)
     voxel_size: 0.02 # Voxel size for downsampling
     voxel_max: 30000 # Max points per sample (null for no limit)
-    min_points_per_tile: 0 # Min points to keep a tile during tiling
+    min_points_per_tile: 2000 # Min points to keep a tile during tiling
     variable: true
     # Label configuration
     label_field: semantic_seg # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
@@ -31,7 +31,7 @@ dataset:
 
   val:
     split: val
-    presample: false
+    presample: true
     shuffle: false
 
   test:
@@ -44,12 +44,12 @@ feature_keys: pos # Use only XYZ coordinates (3 channels)
 
 # Dataset info (update based on your data)
 num_classes: 3 # Number of classes (update for your dataset)
-batch_size: 16
-val_batch_size: 2
-test_batch_size: 2
+batch_size: 64
+val_batch_size: 16
+test_batch_size: 16
 
 dataloader:
-  num_workers: 4
+  num_workers: 12
   collate_fn: collate_to_pyg_batch
 
 # Data augmentation
@@ -58,9 +58,8 @@ datatransforms:
     [
       PointsToTensor,
       FixedPoints,
-      RandomDropout,
-      PointCloudScaling,
       PointCloudXYZAlign,
+      PointCloudScaling,
       PointCloudRotation,
       PointCloudJitter,
     ]
@@ -78,13 +77,13 @@ datatransforms:
 # Training configuration
 val_fn: validate
 ignore_index: null
-epochs: 300
+epochs: 150
 
 cls_weighed_loss: true
 
 criterion_args:
   NAME: CrossEntropy
-  label_smoothing: 0.2
+  label_smoothing: 0.1
 
 optimizer:
   NAME: "adamw"
@@ -92,7 +91,7 @@ optimizer:
 
 # Learning rate scheduler
 sched: cosine
-warmup_epochs: 30
+warmup_epochs: 10
 min_lr: 1.0e-5
 lr: 0.001
 
@@ -100,10 +99,10 @@ grad_norm_clip: 5
 use_voting: false
 
 # I/O
-root_dir: "log/"
-log_dir: "forinstancev2"
+root_dir: "/workspace/log/"
+log_dir: "field_data"
 save_freq: -1 # -1: only save last and best
-val_freq: 10
+val_freq: 5
 
 wandb:
   project: PointNeXt-FORInstanceV2

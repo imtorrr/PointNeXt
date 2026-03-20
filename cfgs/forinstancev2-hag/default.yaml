@@ -10,7 +10,7 @@ dataset:
     tile_overlap: 0.5 # Overlap ratio (0-1)
     voxel_size: 0.02 # Voxel size for downsampling
     voxel_max: 30000 # Max points per sample (null for no limit)
-    min_points_per_tile: 2000 # Min points to keep a tile during tiling
+    min_points_per_tile: 0 # Min points to keep a tile during tiling
     variable: true
     # Label configuration
     label_field: semantic_seg # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
@@ -25,16 +25,16 @@ dataset:
   train:
     split: train
     loop: 1 # Loop through dataset 1 times per epoch
-    presample: true # Presample and cache data
+    presample: false # Presample and cache data
     shuffle: true # Shuffle points
 
   val:
     split: val
-    presample: true
+    presample: false
     shuffle: false
 
   test:
-    split: test
+    split: val
     presample: false
     shuffle: false
 

@@ -2,9 +2,9 @@
 # Model Information
 # Based on standard PointNet++ architecture with PyTorch Geometric implementation
 # Uses only XYZ coordinates (3 channels)
-
 batch_size: 32
-lr: 0.0001
+warmup_epochs: 0
+min_lr: 0.0001
 
 model:
   NAME: VariableSeg
