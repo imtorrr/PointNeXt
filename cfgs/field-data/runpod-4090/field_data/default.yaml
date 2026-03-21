@@ -102,7 +102,7 @@ use_voting: false
 root_dir: "/workspace/log/"
 log_dir: "field_data"
 save_freq: -1 # -1: only save last and best
-val_freq: 5
+val_freq: 2
 
 wandb:
   project: PointNeXt-FORInstanceV2

@@ -36,7 +36,7 @@ dataset:
     shuffle: false
 
   test:
-    split: val
+    split: test
     presample: false
     shuffle: false
 
