@@ -349,7 +349,7 @@ def main(gpu, cfg):
                 else:
                     logging.info(f"Finetuning from {cfg.pretrained_path}")
                     load_checkpoint(
-                        model_module.encoder,
+                        model_module,
                         cfg.pretrained_path,
                         cfg.get("pretrained_module", None),
                     )

@@ -9,6 +9,9 @@ slurm*
 dcgm/
 .DS_Store
 weights/
+*.laz
+*.las
+!example.las
 
 # Byte-compiled / optimized / DLL files
 .idea/
