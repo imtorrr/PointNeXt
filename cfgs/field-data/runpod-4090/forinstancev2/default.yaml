@@ -14,7 +14,7 @@ dataset:
     min_points_per_tile: 2000 # Min points to keep a tile during tiling
     variable: true
     # Label configuration
-    label_field: semantic_seg # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
+    label_field: classification # LAS field for labels ('classification', 'label', 'user_data', or null for unlabeled)
     label_offset: -1 # Offset to apply to labels (e.g., -1 to map [1,2,3] to [0,1,2])
 
     # Feature configuration
@@ -77,7 +77,7 @@ datatransforms:
 # Training configuration
 val_fn: validate
 ignore_index: null
-epochs: 150
+epochs: 50
 
 cls_weighed_loss: true
 
@@ -91,9 +91,9 @@ optimizer:
 
 # Learning rate scheduler
 sched: cosine
-warmup_epochs: 10
+warmup_epochs: 0
 min_lr: 1.0e-5
-lr: 0.001
+lr: 0.0001
 
 grad_norm_clip: 5
 use_voting: false

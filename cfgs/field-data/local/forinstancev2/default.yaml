@@ -80,11 +80,11 @@ val_fn: validate
 ignore_index: null
 epochs: 50
 
-cls_weighed_loss: false
+cls_weighed_loss: true
 
 criterion_args:
   NAME: CrossEntropy
-  label_smoothing: 0.2
+  label_smoothing: 0.1
 
 optimizer:
   NAME: "adamw"
@@ -92,9 +92,9 @@ optimizer:
 
 # Learning rate scheduler
 sched: cosine
-warmup_epochs: 30
+warmup_epochs: 0
 min_lr: 1.0e-5
-lr: 0.001
+lr: 0.0001
 
 grad_norm_clip: 5
 use_voting: false
