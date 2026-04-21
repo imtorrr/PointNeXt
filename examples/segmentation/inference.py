@@ -263,6 +263,7 @@ class SemanticSegmentation:
         label_offset          Integer added to predicted class IDs before saving
                               (e.g. 1 when the LAS file uses 1-indexed classes).
         knn_k                 Neighbours for label propagation (default 16).
+        use_existing_tiles    Use existing tiles if available; generate if missing (default False).
     """
 
     def __init__(self, parameters: dict):
@@ -296,6 +297,10 @@ class SemanticSegmentation:
         self.cfg.load(parameters["cfg_path"], recursive=True)
 
     # ── Internal helpers ───────────────────────────────────────────────────────
+
+    def _tiles_exist(self) -> bool:
+        """Check if tiles already exist in working directory."""
+        return len(glob.glob(os.path.join(self.working_dir, "*.npy"))) > 0
 
     def _load_las(self) -> np.ndarray:
         """Load the input LAS/LAZ file with all configured features.
@@ -451,8 +456,15 @@ class SemanticSegmentation:
         # 1. Load raw cloud (+ features matching training config)
         pc = self._load_las()
 
-        # 2. Tile into small boxes saved as .npy
-        self._tile(pc)
+        # 2. Tile into small boxes saved as .npy (or reuse existing)
+        use_existing = self.params.get("use_existing_tiles", False)
+        if use_existing and self._tiles_exist():
+            n_tiles = len(glob.glob(os.path.join(self.working_dir, "*.npy")))
+            print(f"Using {n_tiles} existing tiles from {self.working_dir}")
+        else:
+            if use_existing:
+                print("No existing tiles found; generating new tiles…")
+            self._tile(pc)
 
         # 3. Dataset / DataLoader
         gravity_dim = self.cfg.datatransforms.kwargs.get("gravity_dim", 2)
@@ -590,6 +602,7 @@ def run_batch_inference(input_path: str, args):
                 "voxel_max": args.voxel_max,
                 "prop_chunk_size": args.prop_chunk_size,
                 "prop_n_jobs": args.prop_n_jobs,
+                "use_existing_tiles": args.use_existing_tiles,
             }
 
             # Only override tile parameters if explicitly provided
@@ -675,6 +688,11 @@ if __name__ == "__main__":
         help="Keep intermediate tile .npy files after inference",
     )
     parser.add_argument(
+        "--use_existing_tiles",
+        action="store_true",
+        help="Reuse existing tiles if available; generate if missing",
+    )
+    parser.add_argument(
         "--voxel_max",
         type=int,
         default=None,
@@ -747,6 +765,7 @@ if __name__ == "__main__":
             "voxel_max": args.voxel_max,
             "prop_chunk_size": args.prop_chunk_size,
             "prop_n_jobs": args.prop_n_jobs,
+            "use_existing_tiles": args.use_existing_tiles,
         }
         if args.tile_size is not None:
             params["tile_size"] = args.tile_size
